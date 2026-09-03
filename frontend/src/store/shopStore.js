@@ -1,0 +1,371 @@
+/**
+ * shopStore.js — Zustand store managing:
+ *  - searchCenter: the current search origin (GPS or Google Place)
+ *  - radiusKm, category, keyword
+ *  - businesses, counters
+ *  - GPS detection
+ */
+import { create } from 'zustand';
+import api from '../services/api';
+import { calculateDistance } from '../services/distanceService';
+import { getCurrentGpsPosition } from '../services/locationService';
+
+/** Default GPS fallback until the browser resolves position */
+const DEFAULT_LAT = 13.9574;
+const DEFAULT_LNG = 79.3488;
+
+function makeGpsCenter(latitude, longitude, accuracy = null, isDefault = false) {
+  return {
+    type: 'gps',
+    latitude,
+    longitude,
+    accuracy,
+    isDefaultFallback: isDefault,
+    name: isDefault ? 'Railway Kodur' : 'Your Live GPS Location',
+    formattedAddress: '',
+    shortAddress: '',
+    placeId: null,
+    googleMapsUri: null,
+  };
+}
+
+function makePlaceCenter(details) {
+  return {
+    type: 'place',
+    latitude: parseFloat(details.latitude),
+    longitude: parseFloat(details.longitude),
+    accuracy: null,
+    isDefaultFallback: false,
+    name: details.name || details.formattedAddress || 'Selected Location',
+    formattedAddress: details.formattedAddress || '',
+    shortAddress: details.shortAddress || '',
+    placeId: details.placeId || null,
+    googleMapsUri: details.googleMapsUri || null,
+  };
+}
+
+export const useShopStore = create((set, get) => ({
+  // ─── Search Center ─────────────────────────────────────────────────────────
+  searchCenter: makeGpsCenter(DEFAULT_LAT, DEFAULT_LNG, null, true),
+
+  // Legacy-compatible lat/lng shortcuts (derived from searchCenter)
+  get latitude() {
+    return get().searchCenter.latitude;
+  },
+  get longitude() {
+    return get().searchCenter.longitude;
+  },
+
+  // ─── Search Filters ────────────────────────────────────────────────────────
+  radiusKm: 2.0,
+  category: '',
+  keyword: '',
+
+  // ─── Search State & Race-Condition Prevention ──────────────────────────────
+  currentSearchId: null,
+
+  // ─── Businesses & Counters ─────────────────────────────────────────────────
+  businesses: [],
+  total: 0,
+  withWebsites: 0,
+  withoutWebsites: 0,
+  goodWebsites: 0,
+  needsImprovement: 0,
+  selectedBusinessId: null,
+
+  // ─── Debug Info (from backend, populated only in DEBUG=true) ───────────────
+  debugInfo: null,
+
+  // ─── User Device GPS ────────────────────────────────────────────────────────
+  userGps: null,
+
+  // ─── Status & API Error Diagnostics ────────────────────────────────────────
+  loading: false,
+  error: null,
+  apiError: null,
+  errorType: null,
+  providerUsed: 'unknown',
+  isDetectingLocation: false,
+  locationPermissionGranted: false,
+
+  // ─── Computed helpers ──────────────────────────────────────────────────────
+  locationName: 'Current GPS Location',
+
+  // ─── Helper to clear state immediately ─────────────────────────────────────
+  clearResults: () => {
+    set({
+      businesses: [],
+      total: 0,
+      withWebsites: 0,
+      withoutWebsites: 0,
+      goodWebsites: 0,
+      needsImprovement: 0,
+      selectedBusinessId: null,
+      debugInfo: null,
+      error: null,
+    });
+  },
+
+  // ─── Actions ───────────────────────────────────────────────────────────────
+
+  /**
+   * Detect the user's current high-accuracy GPS position.
+   * Sets searchCenter to type:'gps' and persists userGps coordinates.
+   * Optionally triggers a new search after detection.
+   */
+  detectCurrentLocation: async (autoSearch = true) => {
+    set({ isDetectingLocation: true });
+    try {
+      const { latitude, longitude, accuracy } = await getCurrentGpsPosition();
+      const center = makeGpsCenter(latitude, longitude, accuracy, false);
+      set({
+        searchCenter: center,
+        userGps: { latitude, longitude, accuracy },
+        latitude,
+        longitude,
+        locationName: 'Your Live GPS Location',
+        locationPermissionGranted: true,
+        isDetectingLocation: false,
+        error: null,
+      });
+      if (autoSearch) {
+        await get().searchNearby();
+      }
+      return { latitude, longitude, accuracy };
+    } catch (err) {
+      console.log('GPS detection note (using fallback):', err.message);
+      set({ isDetectingLocation: false });
+      if (get().businesses.length === 0 && autoSearch) {
+        await get().searchNearby();
+      }
+      return null;
+    }
+  },
+
+  /**
+   * Switch search center to a Google Place resolved from Places Autocomplete.
+   * Expects the shape returned by GooglePlacesAutocomplete.onPlaceSelect.
+   */
+  setSearchCenterFromPlace: async (details, autoSearch = true) => {
+    const center = makePlaceCenter(details);
+    get().clearResults();
+    set({
+      searchCenter: center,
+      latitude: center.latitude,
+      longitude: center.longitude,
+      locationName: center.name,
+      locationPermissionGranted: true,
+    });
+    if (autoSearch) {
+      await get().searchNearby();
+    }
+  },
+
+  /**
+   * Set center from explicit coordinates (legacy helper).
+   */
+  setLocation: async (lat, lng, name = 'Custom Location', accuracy = null, autoSearch = true) => {
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+    const center = { ...makeGpsCenter(latitude, longitude, accuracy), name };
+    get().clearResults();
+    set({
+      searchCenter: center,
+      latitude,
+      longitude,
+      locationName: name,
+      locationPermissionGranted: true,
+    });
+    if (autoSearch) {
+      await get().searchNearby();
+    }
+  },
+
+  setRadius: (radius) => {
+    const r = parseFloat(radius);
+    if (!isNaN(r) && r > 0) {
+      get().clearResults();
+      set({ radiusKm: r });
+    }
+  },
+
+  setCategory: (category) => {
+    set({ category: category === 'All Categories' ? '' : category });
+  },
+
+  setKeyword: (keyword) => {
+    get().clearResults();
+    set({ keyword });
+  },
+
+  setSelectedBusinessId: (id) => {
+    set({ selectedBusinessId: id });
+  },
+
+  // ─── Location Suggestions ──────────────────────────────────────────────────
+  fetchLocationSuggestions: async (query) => {
+    if (!query || query.length < 2) return [];
+    try {
+      const res = await api.get('/businesses/places/autocomplete', { params: { query } });
+      return res.data || [];
+    } catch (err) {
+      console.error('Failed to fetch location suggestions', err);
+      return [];
+    }
+  },
+
+  selectPlace: async (placeId) => {
+    try {
+      const res = await api.get('/businesses/places/details', { params: { place_id: placeId } });
+      const details = res.data;
+      if (!details?.latitude) return false;
+      const center = makePlaceCenter({
+        latitude: details.latitude,
+        longitude: details.longitude,
+        name: details.name || '',
+        formattedAddress: details.formatted_address || '',
+        shortAddress: details.short_address || '',
+        placeId: details.place_id,
+        googleMapsUri: details.google_maps_uri || null,
+      });
+      get().clearResults();
+      set({
+        searchCenter: center,
+        latitude: center.latitude,
+        longitude: center.longitude,
+        locationName: center.name,
+        locationPermissionGranted: true,
+      });
+      await get().searchNearby();
+      return true;
+    } catch (err) {
+      console.error('Failed to resolve place', err);
+      return false;
+    }
+  },
+
+  // ─── Core Nearby Search ────────────────────────────────────────────────────
+  searchNearby: async () => {
+    const { searchCenter, radiusKm, category, keyword } = get();
+    const latNum = parseFloat(searchCenter.latitude);
+    const lngNum = parseFloat(searchCenter.longitude);
+    const radNum = parseFloat(radiusKm) || 5.0;
+
+    // Generate unique searchId for race-condition validation
+    const searchId = `${category || 'all'}-${latNum}-${lngNum}-${radNum}-${keyword || ''}-${Date.now()}`;
+
+    // IMMEDIATELY clear old results and set loading + currentSearchId
+    set({
+      currentSearchId: searchId,
+      businesses: [],
+      total: 0,
+      withWebsites: 0,
+      withoutWebsites: 0,
+      goodWebsites: 0,
+      needsImprovement: 0,
+      selectedBusinessId: null,
+      loading: true,
+      error: null,
+      apiError: null,
+      errorType: null,
+      debugInfo: null,
+    });
+
+    try {
+      const params = { latitude: latNum, longitude: lngNum, radius_km: radNum };
+      if (category && category !== 'All Categories') params.category = category;
+      if (keyword?.trim()) params.keyword = keyword.trim();
+
+      const res = await api.get('/businesses/nearby', { params });
+
+      // RACE CONDITION CHECK: Ignore response if user initiated a newer search
+      if (get().currentSearchId !== searchId) {
+        console.log(`[shopStore] Ignored stale search response for searchId: ${searchId}`);
+        return [];
+      }
+
+      const rawPlaces = res.data.businesses || [];
+
+      // Strict client-side Place validation & Haversine distance double-check
+      const validated = rawPlaces
+        .filter((p) => p && (p.external_place_id || p.id) && typeof p.latitude === 'number' && typeof p.longitude === 'number')
+        .filter((p) => {
+          const status = (p.business_status || '').toUpperCase().trim();
+          return status !== 'CLOSED_PERMANENTLY' && status !== 'PERMANENTLY_CLOSED' && status !== 'CLOSED';
+        })
+        .map((p) => {
+          const exactDist = calculateDistance(latNum, lngNum, p.latitude, p.longitude);
+          return { ...p, distance_km: exactDist != null ? exactDist : p.distance_km };
+        })
+        .filter((p) => p.distance_km != null && p.distance_km <= radNum)
+        .sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
+
+      // Dynamic category counters based strictly on final validated results
+      const totalCount = validated.length;
+      const withWeb = validated.filter((b) => b.website_status === 'WEBSITE_AVAILABLE').length;
+      const withoutWeb = validated.filter(
+        (b) => b.website_status === 'NO_WEBSITE' || b.website_status === 'WEBSITE_UNREACHABLE'
+      ).length;
+      const goodWeb = validated.filter(
+        (b) => b.website_score != null && b.website_score >= 80
+      ).length;
+      const needsImp = validated.filter(
+        (b) =>
+          b.website_status === 'WEBSITE_AVAILABLE' &&
+          (b.website_score == null || b.website_score < 80)
+      ).length;
+
+      // Store debug info and API diagnostics from backend
+      const debugInfo = res.data.debug || null;
+      const apiError = res.data.error_message || null;
+      const errorType = res.data.error_type || null;
+      const providerUsed = res.data.provider_used || 'GooglePlacesAPI';
+
+      set({
+        businesses: validated,
+        total: totalCount,
+        withWebsites: withWeb,
+        withoutWebsites: withoutWeb,
+        goodWebsites: goodWeb,
+        needsImprovement: needsImp,
+        loading: false,
+        error: null,
+        apiError,
+        errorType,
+        providerUsed,
+        debugInfo,
+      });
+
+      // Record search history (best effort)
+      try {
+        await api.post('/search', {
+          latitude: latNum,
+          longitude: lngNum,
+          radius_km: radNum,
+          category: category || null,
+          keyword: keyword || null,
+        });
+      } catch (_) {}
+
+      return validated;
+    } catch (err) {
+      if (get().currentSearchId !== searchId) return [];
+
+      let msg = 'Failed to find nearby shops. Please try again.';
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        if (Array.isArray(detail)) {
+          msg = detail.map((d) => d.msg || d.message || String(d)).join(', ');
+        } else if (typeof detail === 'object') {
+          msg = detail.msg || detail.message || JSON.stringify(detail);
+        } else {
+          msg = String(detail);
+        }
+      } else if (err.message) {
+        msg = err.message;
+      }
+      set({ loading: false, error: msg });
+      throw new Error(msg);
+    }
+  },
+}));
