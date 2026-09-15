@@ -1,6 +1,8 @@
 # Updated places search integration
 from datetime import datetime
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.config import settings
@@ -8,7 +10,7 @@ from app.database import get_db, SessionLocal
 from app.models.business import Business, WebsiteStatus, WebsiteQuality
 from app.models.website_analysis import WebsiteAnalysis
 from app.schemas.business import BusinessOut, BusinessListResponse
-from app.services.places_service import get_places_provider, is_category_matching, SearchDebugInfo, PlaceData
+from app.services.places_service import get_places_provider, is_category_matching, infer_canonical_category, SearchDebugInfo, PlaceData
 from app.services.website_detection_service import detect_website, discover_brand_website
 from app.services.website_analysis_service import analyze_website
 from app.services.distance_service import haversine_km
@@ -138,31 +140,47 @@ def get_nearby_businesses(
             )
     except Exception as ex:
         print(f"External places API search warning: {ex}. Serving database cached businesses.")
-        db_bizs = db.query(Business).filter(Business.external_place_id.like("ChIJ%")).all()
+        db_bizs = db.query(Business).all()
+        seen_db_keys = set()
         for b in db_bizs:
             b_status = (b.business_status or "OPERATIONAL").upper().strip()
-            if b_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED"):
+            if b_status != "OPERATIONAL" or b_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED", "CLOSED_TEMPORARILY", "TEMPORARILY_CLOSED"):
                 continue
+            b_name_l = (b.name or "").strip().lower()
+            if any(w in b_name_l for w in ["(permanently closed)", "[permanently closed]", "(closed)", "permanently closed", "closed permanently"]):
+                continue
+
+            b_cat = infer_canonical_category([], None, b.name or "", current_cat=b.category)
+
             dist = haversine_km(latitude, longitude, b.latitude, b.longitude)
-            if dist <= radius_km:
-                places.append(
-                    PlaceData(
-                        place_id=b.external_place_id or f"db_{b.id}",
-                        name=b.name,
-                        category=b.category or "Shop",
-                        address=b.address or "",
-                        short_address=b.short_address or b.address or b.name,
-                        google_maps_uri=b.google_maps_uri or f"https://maps.google.com/?q={b.latitude},{b.longitude}",
-                        latitude=b.latitude,
-                        longitude=b.longitude,
-                        phone=b.phone,
-                        website_url=b.website_url,
-                        rating=b.rating,
-                        review_count=b.review_count,
-                        business_status=b.business_status or "OPERATIONAL",
-                        distance_km=dist,
-                    )
+            if dist > radius_km:
+                continue
+            if category and not is_category_matching(b_cat, category):
+                continue
+            pid = b.external_place_id or f"db_{b.id}"
+            norm_key = (b.name.strip().lower(), round(b.latitude, 4), round(b.longitude, 4))
+            if pid in seen_db_keys or norm_key in seen_db_keys:
+                continue
+            seen_db_keys.add(pid)
+            seen_db_keys.add(norm_key)
+            places.append(
+                PlaceData(
+                    place_id=pid,
+                    name=b.name,
+                    category=b_cat,
+                    address=b.address or "",
+                    short_address=b.short_address or b.address or b.name,
+                    google_maps_uri=b.google_maps_uri or f"https://maps.google.com/?q={b.latitude},{b.longitude}",
+                    latitude=b.latitude,
+                    longitude=b.longitude,
+                    phone=b.phone,
+                    website_url=b.website_url,
+                    rating=b.rating,
+                    review_count=b.review_count,
+                    business_status=b.business_status or "OPERATIONAL",
+                    distance_km=dist,
                 )
+            )
 
     businesses_out: list[BusinessOut] = []
 
@@ -178,8 +196,14 @@ def get_nearby_businesses(
 
     for p in places:
         p_status = (p.business_status or "OPERATIONAL").upper().strip()
-        if p_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED"):
+        if p_status != "OPERATIONAL" or p_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED", "CLOSED_TEMPORARILY", "TEMPORARILY_CLOSED"):
             continue
+
+        p_name_l = (p.name or "").strip().lower()
+        if any(w in p_name_l for w in ["(permanently closed)", "[permanently closed]", "(closed)", "permanently closed", "closed permanently"]):
+            continue
+
+        p.category = infer_canonical_category([], None, p.name or "", current_cat=p.category)
 
         dist = haversine_km(latitude, longitude, p.latitude, p.longitude)
         if dist > radius_km:
@@ -271,10 +295,16 @@ def get_nearby_businesses(
         if biz.id:
             background_tasks.add_task(background_website_sync, biz.id, w_url)
 
+    seen_biz_ids: set[int] = set()
+    seen_biz_keys: set[tuple[str, float, float]] = set()
 
     for p in places:
         p_status = (p.business_status or "OPERATIONAL").upper().strip()
-        if p_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED"):
+        if p_status != "OPERATIONAL" or p_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED", "CLOSED_TEMPORARILY", "TEMPORARILY_CLOSED"):
+            continue
+
+        p_name_l = (p.name or "").strip().lower()
+        if any(w in p_name_l for w in ["(permanently closed)", "[permanently closed]", "(closed)", "permanently closed", "closed permanently"]):
             continue
 
         dist = haversine_km(latitude, longitude, p.latitude, p.longitude)
@@ -285,18 +315,35 @@ def get_nearby_businesses(
         if not biz:
             continue
 
-        b_biz_status = (biz.business_status or "OPERATIONAL").upper().strip()
-        if b_biz_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED"):
+        # Prevent duplicate instances of the same business from appearing twice
+        if biz.id in seen_biz_ids:
             continue
 
-        if category and not is_category_matching(p.category or biz.category, category):
+        norm_key = (
+            (p.name or biz.name or "").strip().lower(),
+            round(p.latitude, 4),
+            round(p.longitude, 4)
+        )
+        if norm_key in seen_biz_keys:
+            continue
+
+        seen_biz_ids.add(biz.id)
+        seen_biz_keys.add(norm_key)
+
+        b_biz_status = (biz.business_status or "OPERATIONAL").upper().strip()
+        if b_biz_status != "OPERATIONAL" or b_biz_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED", "CLOSED_TEMPORARILY", "TEMPORARILY_CLOSED"):
+            continue
+
+        final_cat = infer_canonical_category([], None, p.name or biz.name, current_cat=p.category or biz.category)
+
+        if category and not is_category_matching(final_cat, category):
             continue
 
         b_dict = {
             "id": biz.id,
             "external_place_id": biz.external_place_id,
             "name": p.name or biz.name,
-            "category": p.category or biz.category,
+            "category": final_cat,
             "address": p.address or biz.address,
             "short_address": p.short_address or getattr(biz, 'short_address', None) or biz.address,
             "google_maps_uri": p.google_maps_uri or getattr(biz, 'google_maps_uri', None),

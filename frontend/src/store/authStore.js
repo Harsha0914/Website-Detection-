@@ -11,13 +11,37 @@ export const useAuthStore = create((set, get) => ({
   login: async (email, password) => {
     set({ loading: true, error: null });
     try {
-      const res = await api.post('/auth/login', { email: email.trim().toLowerCase(), password }, { timeout: 30000 });
-      const { access_token, refresh_token, role, full_name, user_id } = res.data;
+      let data;
+      try {
+        const res = await api.post('/auth/login', { email: email.trim().toLowerCase(), password }, { timeout: 30000 });
+        data = res.data;
+      } catch (axiosErr) {
+        console.warn('Axios login attempt failed, attempting fallback fetch...', axiosErr);
+        const baseUrl = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : 'http://localhost:8001';
+        const fetchUrl = `${baseUrl.replace(/\/+$/, '')}/api/auth/login`;
+        const fetchRes = await fetch(fetchUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        });
+        if (!fetchRes.ok) {
+          const errBody = await fetchRes.json().catch(() => ({}));
+          const errorMsg = errBody.detail || `Server responded with status ${fetchRes.status}`;
+          throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+        }
+        data = await fetchRes.json();
+      }
+
+      const { access_token, refresh_token, role, full_name, user_id } = data;
       const userInfo = { id: user_id, email: email.trim().toLowerCase(), full_name, role };
 
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', refresh_token);
-      localStorage.setItem('user_info', JSON.stringify(userInfo));
+      try {
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('refresh_token', refresh_token);
+        localStorage.setItem('user_info', JSON.stringify(userInfo));
+      } catch (storageErr) {
+        console.warn('LocalStorage write warning:', storageErr);
+      }
 
       set({
         user: userInfo,

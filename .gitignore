@@ -14,7 +14,10 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
-# shop.db
+*.db
+*.db-shm
+*.db-wal
+*.bak
 
 # Logs & OS
 *.log
@@ -25,4 +28,6 @@ yarn-error.log*
 Thumbs.db
 
 .vercel
-.env*
+.env
+.env.*
+!.env.example

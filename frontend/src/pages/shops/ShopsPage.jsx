@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Store,
   Globe,
@@ -19,6 +19,9 @@ import {
   TrendingUp,
   Zap,
   Key,
+  MessageCircle,
+  Send,
+  Bot,
 } from 'lucide-react';
 import Navbar from '../../components/layout/Navbar';
 import Footer from '../../components/layout/Footer';
@@ -29,6 +32,8 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { EmptyState } from '../../components/common/EmptyState';
 import { GooglePlacesAutocomplete } from '../../components/location/GooglePlacesAutocomplete';
 import GoogleMapsConnectModal from '../../components/common/GoogleMapsConnectModal';
+import BulkWhatsAppBroadcastModal from '../../components/shops/BulkWhatsAppBroadcastModal';
+import { launchWhatsAppApp } from '../../services/whatsappService';
 import { useShopStore } from '../../store/shopStore';
 
 const CATEGORIES = [
@@ -37,6 +42,7 @@ const CATEGORIES = [
   'Supermarket',
   'General Store',
   'Department Store',
+  'Meat & Poultry',
   'Pharmacy',
   'Bakery',
   'Clothing Store',
@@ -58,18 +64,24 @@ const CATEGORIES = [
 ];
 const PRESET_DISTANCES = [0.5, 1, 2, 5, 10, 20, 30, 50];
 
-const QUICK_CITIES = [
-  { name: 'Railway Kodur', lat: 13.9574, lng: 79.3488 },
-  { name: 'Puttur (AP)', lat: 13.4381, lng: 79.5522 },
-  { name: 'Tirupati', lat: 13.6288, lng: 79.4192 },
-  { name: 'Rajampet', lat: 14.1936, lng: 79.1586 },
-  { name: 'Kadapa', lat: 14.4673, lng: 78.8242 },
-  { name: 'Chittoor', lat: 13.2172, lng: 79.1003 },
-  { name: 'Hyderabad', lat: 17.4485, lng: 78.3895 },
-  { name: 'Chennai', lat: 13.0827, lng: 80.2707 },
-  { name: 'Bangalore', lat: 12.9716, lng: 77.5946 },
-  { name: 'Vijayawada', lat: 16.5062, lng: 80.6480 },
-  { name: 'Visakhapatnam', lat: 17.6868, lng: 83.2185 },
+export const QUICK_PLACES = [
+  { name: 'Rajampet', lat: 14.1936, lng: 79.1586, group: 'Local / AP' },
+  { name: 'Railway Kodur', lat: 13.9574, lng: 79.3488, group: 'Local / AP' },
+  { name: 'Tirupati', lat: 13.6288, lng: 79.4192, group: 'Local / AP' },
+  { name: 'Kadapa', lat: 14.4673, lng: 78.8242, group: 'Local / AP' },
+  { name: 'Puttur (AP)', lat: 13.4381, lng: 79.5522, group: 'Local / AP' },
+  { name: 'Chittoor', lat: 13.2172, lng: 79.1003, group: 'Local / AP' },
+  { name: 'Nellore', lat: 14.4426, lng: 79.9865, group: 'Local / AP' },
+  { name: 'Vijayawada', lat: 16.5062, lng: 80.6480, group: 'Local / AP' },
+  { name: 'Visakhapatnam', lat: 17.6868, lng: 83.2185, group: 'Local / AP' },
+  { name: 'Kurnool', lat: 15.8281, lng: 78.0373, group: 'Local / AP' },
+  { name: 'Anantapur', lat: 14.6819, lng: 77.6006, group: 'Local / AP' },
+  { name: 'Guntur', lat: 16.3067, lng: 80.4365, group: 'Local / AP' },
+  { name: 'Hyderabad', lat: 17.4485, lng: 78.3895, group: 'Major Metros' },
+  { name: 'Bangalore', lat: 12.9716, lng: 77.5946, group: 'Major Metros' },
+  { name: 'Chennai', lat: 13.0827, lng: 80.2707, group: 'Major Metros' },
+  { name: 'Mumbai', lat: 19.0760, lng: 72.8777, group: 'Major Metros' },
+  { name: 'Delhi NCR', lat: 28.6139, lng: 77.2090, group: 'Major Metros' },
 ];
 
 const TAB_CONFIG = {
@@ -84,7 +96,15 @@ export default function ShopsPage({ defaultTab = 'all' }) {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [viewMode, setViewMode] = useState('split');
   const [showModifyModal, setShowModifyModal] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('send_whatsapp') === '1' || searchParams.get('broadcast') === '1') {
+      setShowBroadcastModal(true);
+    }
+  }, [searchParams]);
 
   const {
     businesses, searchCenter, radiusKm, category, keyword,
@@ -109,9 +129,6 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     if (businesses.length === 0) {
       searchNearby().catch(() => {});
     }
-    if (searchCenter?.isDefaultFallback) {
-      detectCurrentLocation(true).catch(() => {});
-    }
   }, []);
   useEffect(() => { setActiveTab(defaultTab); }, [defaultTab]);
   useEffect(() => {
@@ -134,9 +151,12 @@ export default function ShopsPage({ defaultTab = 'all' }) {
   }, [businesses]);
 
   const filteredBusinesses = businesses.filter(b => {
-    // 0. Exclude permanently closed shops
-    const status = (b.business_status || '').toUpperCase().trim();
-    if (status === 'CLOSED_PERMANENTLY' || status === 'PERMANENTLY_CLOSED' || status === 'CLOSED') return false;
+    // 0. Exclude permanently & temporarily closed shops
+    const status = (b.business_status || 'OPERATIONAL').toUpperCase().trim();
+    if (status !== 'OPERATIONAL' || status === 'CLOSED_PERMANENTLY' || status === 'PERMANENTLY_CLOSED' || status === 'CLOSED' || status === 'CLOSED_TEMPORARILY' || status === 'TEMPORARILY_CLOSED') return false;
+
+    const nameLower = (b.name || '').toLowerCase();
+    if (nameLower.includes('(permanently closed)') || nameLower.includes('[permanently closed]') || nameLower.includes('(closed)') || nameLower.includes('closed permanently')) return false;
 
     // 1. Strict radius enforcement (Requirement 1 & 13)
     if (b.distance_km != null && b.distance_km > radiusKm) return false;
@@ -145,8 +165,43 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     if (category && category !== 'All Categories') {
       const targetCat = category.toLowerCase().trim();
       const shopCat = (b.category || '').toLowerCase().trim();
-      if (shopCat !== targetCat && !shopCat.includes(targetCat) && !targetCat.includes(shopCat)) {
-        return false;
+
+      if (targetCat === 'restaurant' || targetCat.includes('restaurant')) {
+        if (!['restaurant', 'family restaurant', 'fast food restaurant'].includes(shopCat)) {
+          return false;
+        }
+      } else if (targetCat === 'beauty salon' || targetCat.includes('salon') || targetCat.includes('spa') || targetCat.includes('barber')) {
+        if (!['beauty salon', 'hair salon', 'barber shop', 'spa'].includes(shopCat)) {
+          return false;
+        }
+      } else if (targetCat === 'bakery' || targetCat.includes('bakery')) {
+        if (!['bakery', 'pastry shop'].includes(shopCat)) {
+          return false;
+        }
+      } else if (targetCat === 'supermarket' || targetCat.includes('supermarket')) {
+        if (!['supermarket', 'hypermarket'].includes(shopCat)) {
+          return false;
+        }
+      } else if (targetCat === 'grocery store' || targetCat.includes('grocery') || targetCat.includes('general store')) {
+        if (!['grocery store', 'general store', 'convenience store'].includes(shopCat)) {
+          return false;
+        }
+      } else if (targetCat === 'pharmacy' || targetCat.includes('pharmacy') || targetCat.includes('medical')) {
+        if (!['pharmacy', 'drugstore'].includes(shopCat)) {
+          return false;
+        }
+      } else if (targetCat === 'cafe' || targetCat.includes('cafe')) {
+        if (!['cafe', 'coffee shop'].includes(shopCat)) {
+          return false;
+        }
+      } else if (targetCat === 'meat & poultry' || targetCat.includes('meat') || targetCat.includes('poultry') || targetCat.includes('chicken') || targetCat.includes('mutton') || targetCat.includes('fish')) {
+        if (!['meat & poultry', 'meat shop'].includes(shopCat)) {
+          return false;
+        }
+      } else {
+        if (shopCat !== targetCat && !shopCat.includes(targetCat) && !targetCat.includes(shopCat)) {
+          return false;
+        }
       }
     }
 
@@ -157,6 +212,15 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     if (activeTab === 'needs-improvement') return b.website_status === 'WEBSITE_AVAILABLE' && (b.website_score == null || b.website_score < 80);
     return true;
   });
+
+  // Shops without website available for bulk outreach
+  const noWebsiteShops = React.useMemo(() => {
+    return filteredBusinesses.filter(b => b.website_status === 'NO_WEBSITE' || b.website_status === 'WEBSITE_UNREACHABLE');
+  }, [filteredBusinesses]);
+
+  const broadcastTargetList = activeTab === 'no-websites' 
+    ? filteredBusinesses 
+    : (noWebsiteShops.length > 0 ? noWebsiteShops : filteredBusinesses);
 
   const tabs = [
     { id: 'all',              label: 'All Shops',          count: total,           icon: Store,        path: '/shops' },
@@ -474,74 +538,63 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                     ? `Searching within ${radiusKm} km…`
                     : total > 0
                     ? `${total} shops found within ${radiusKm} km`
-                    : `No shops found within ${radiusKm} km. Select a city or expand radius.`}
+                    : `No shops found within ${radiusKm} km. Try modifying search radius.`}
                 </span>
               </p>
 
-              {/* Quick City Switcher */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--sp-muted)' }}>Quick Select:</span>
-                {QUICK_CITIES.map(city => {
-                  const isCurrentCity = locationName?.toLowerCase()?.includes(city.name.toLowerCase());
-                  return (
-                    <button
-                      key={city.name}
-                      onClick={() => setLocation(city.lat, city.lng, city.name, null, true)}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: 20,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        border: '1px solid ' + (isCurrentCity ? 'transparent' : 'var(--sp-border)'),
-                        background: isCurrentCity
-                          ? 'linear-gradient(135deg,#6366f1,#8b5cf6)'
-                          : 'var(--sp-card)',
-                        color: isCurrentCity ? '#fff' : 'var(--sp-text)',
-                        cursor: 'pointer',
-                        transition: 'all .2s',
-                        boxShadow: isCurrentCity ? '0 2px 8px rgba(99,102,241,.3)' : 'none',
-                      }}
-                    >
-                      {city.name}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Location Selector & GPS controls directly under subtitle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={async () => { try { await detectCurrentLocation(true); } catch(_){} }}
+                  disabled={isDetectingLocation}
+                  className="sp-ctrl-btn sp-ctrl-gps"
+                  style={{ padding: '7px 14px' }}
+                >
+                  <Crosshair
+                    style={{ width: 13, height: 13 }}
+                    className={isDetectingLocation ? 'sp-spin' : ''}
+                  />
+                  <span>{isDetectingLocation ? 'Locating…' : 'Use Current GPS'}</span>
+                </button>
 
-              {searchCenter?.isDefaultFallback && (
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  marginTop: 10,
-                  padding: '5px 12px',
-                  borderRadius: 10,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  background: 'rgba(245, 158, 11, 0.12)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  color: '#d97706',
-                }}>
-                  <MapPin style={{ width: 12, height: 12 }} />
-                  <span>Showing Hyderabad (Default). Click <strong>"Use Current GPS"</strong> above or choose your city to view shops in your area.</span>
+                {/* Quick Places Switcher Dropdown */}
+                <div style={{ position: 'relative' }}>
+                  <select
+                    value={QUICK_PLACES.find(c => locationName?.toLowerCase()?.includes(c.name.toLowerCase()))?.name || ''}
+                    onChange={(e) => {
+                      const selected = QUICK_PLACES.find(c => c.name === e.target.value);
+                      if (selected) {
+                        setLocation(selected.lat, selected.lng, selected.name, null, true);
+                      }
+                    }}
+                    className="sp-ctrl-btn"
+                    style={{
+                      padding: '7px 12px',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      fontSize: 12,
+                    }}
+                    title="Quick switch city / place"
+                  >
+                    <option value="" disabled>📍 Quick Places</option>
+                    <optgroup label="📍 Local & Andhra Pradesh">
+                      {QUICK_PLACES.filter(p => p.group === 'Local / AP').map(c => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🏢 Major Metros">
+                      {QUICK_PLACES.filter(p => p.group === 'Major Metros').map(c => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                  </select>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Right: controls */}
             <div className="sp-controls">
-              <button
-                onClick={async () => { try { await detectCurrentLocation(true); } catch(_){} }}
-                disabled={isDetectingLocation}
-                className="sp-ctrl-btn sp-ctrl-gps"
-              >
-                <Crosshair
-                  style={{ width: 13, height: 13 }}
-                  className={isDetectingLocation ? 'sp-spin' : ''}
-                />
-                <span>{isDetectingLocation ? 'Locating…' : 'Use Current GPS'}</span>
-              </button>
-
               {/* View mode switcher */}
               <div className="sp-view-group">
                 {[
@@ -830,14 +883,17 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                     onClick={async () => {
                       try {
                         const pos = await detectCurrentLocation(false);
-                        setTempSearchCenter({
-                          type: 'gps',
-                          latitude: pos.latitude,
-                          longitude: pos.longitude,
-                          accuracy: pos.accuracy,
-                          name: 'Current GPS Location',
-                        });
-                        setModalKey(k => k + 1);
+                        if (pos) {
+                          setTempSearchCenter({
+                            type: 'gps',
+                            latitude: pos.latitude,
+                            longitude: pos.longitude,
+                            accuracy: pos.accuracy,
+                            name: pos.name || 'Current GPS Location',
+                            formattedAddress: pos.formattedAddress || '',
+                          });
+                          setModalKey(k => k + 1);
+                        }
                       } catch (_) {}
                     }}
                     disabled={isDetectingLocation}
@@ -860,6 +916,47 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                   placeholder="Search location or city… e.g. Chennai, Bangalore, Hyderabad"
                   onPlaceSelect={details => setTempSearchCenter(details)}
                 />
+
+                {/* Quick Select Places Grid in Modal */}
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--sp-muted)', marginBottom: 6 }}>
+                    ⚡ Quick Select Popular Places:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: 110, overflowY: 'auto', padding: '2px 0' }}>
+                    {QUICK_PLACES.map(city => {
+                      const isSelected = tempSearchCenter?.name?.toLowerCase()?.includes(city.name.toLowerCase());
+                      return (
+                        <button
+                          key={city.name}
+                          type="button"
+                          onClick={() => {
+                            setTempSearchCenter({
+                              type: 'place',
+                              latitude: city.lat,
+                              longitude: city.lng,
+                              name: city.name,
+                              formattedAddress: `${city.name}, India`,
+                            });
+                            setModalKey(k => k + 1);
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 12,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            border: isSelected ? '1.5px solid var(--sp-accent)' : '1px solid var(--sp-border)',
+                            background: isSelected ? 'var(--sp-accent)' : 'var(--sp-card)',
+                            color: isSelected ? '#fff' : 'var(--sp-text)',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          {city.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* Radius */}
@@ -940,6 +1037,16 @@ export default function ShopsPage({ defaultTab = 'all' }) {
         onClose={() => setShowKeyModal(false)}
         onConnected={() => {
           searchNearby().catch(() => {});
+        }}
+      />
+
+      {/* Bulk AI WhatsApp Broadcast Modal */}
+      <BulkWhatsAppBroadcastModal
+        isOpen={showBroadcastModal}
+        onClose={() => setShowBroadcastModal(false)}
+        shops={broadcastTargetList}
+        onBroadcastComplete={() => {
+          // Trigger search update or any required refresh
         }}
       />
 

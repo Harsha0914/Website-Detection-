@@ -53,22 +53,10 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email_clean).first()
     
     if not user:
-        # Auto-create user account seamlessly
-        user = User(
-            full_name=email_clean.split("@")[0].replace(".", " ").title(),
-            email=email_clean,
-            password_hash=hash_password(req.password),
-            role=UserRole.USER,
-            is_active=True
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        # If user exists, sync and update password to whatever the user entered
-        if not verify_password(req.password, user.password_hash):
-            user.password_hash = hash_password(req.password)
-            db.commit()
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user.is_active:
         user.is_active = True

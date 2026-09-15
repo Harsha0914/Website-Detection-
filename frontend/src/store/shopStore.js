@@ -8,23 +8,24 @@
 import { create } from 'zustand';
 import api from '../services/api';
 import { calculateDistance } from '../services/distanceService';
-import { getCurrentGpsPosition } from '../services/locationService';
+import { getCurrentGpsPosition, getIpFallbackPosition, reverseGeocodeCoords } from '../services/locationService';
 
-/** Default GPS fallback until the browser resolves position */
-const DEFAULT_LAT = 13.9574;
-const DEFAULT_LNG = 79.3488;
+/** Default location (Rajampet, Annamayya District) */
+const DEFAULT_LAT = 14.1936;
+const DEFAULT_LNG = 79.1586;
+const DEFAULT_NAME = 'Rajampet';
 
-function makeGpsCenter(latitude, longitude, accuracy = null, isDefault = false) {
+function makeGpsCenter(latitude, longitude, accuracy = null, isDefault = false, name = null, formattedAddress = '') {
   return {
-    type: 'gps',
+    type: isDefault ? 'place' : 'gps',
     latitude,
     longitude,
     accuracy,
     isDefaultFallback: isDefault,
-    name: isDefault ? 'Railway Kodur' : 'Your Live GPS Location',
-    formattedAddress: '',
-    shortAddress: '',
-    placeId: null,
+    name: name || (isDefault ? DEFAULT_NAME : 'Your Live GPS Location'),
+    formattedAddress: formattedAddress || (isDefault ? 'Rajampet, Annamayya District, Andhra Pradesh, India' : ''),
+    shortAddress: isDefault ? 'Rajampet' : '',
+    placeId: isDefault ? 'loc_ap_rajampet' : null,
     googleMapsUri: null,
   };
 }
@@ -57,7 +58,7 @@ export const useShopStore = create((set, get) => ({
   },
 
   // ─── Search Filters ────────────────────────────────────────────────────────
-  radiusKm: 2.0,
+  radiusKm: 10.0,
   category: '',
   keyword: '',
 
@@ -89,7 +90,7 @@ export const useShopStore = create((set, get) => ({
   locationPermissionGranted: false,
 
   // ─── Computed helpers ──────────────────────────────────────────────────────
-  locationName: 'Current GPS Location',
+  locationName: 'Current Location',
 
   // ─── Helper to clear state immediately ─────────────────────────────────────
   clearResults: () => {
@@ -109,36 +110,54 @@ export const useShopStore = create((set, get) => ({
   // ─── Actions ───────────────────────────────────────────────────────────────
 
   /**
-   * Detect the user's current high-accuracy GPS position.
+   * Detect the user's current high-accuracy device GPS position.
    * Sets searchCenter to type:'gps' and persists userGps coordinates.
    * Optionally triggers a new search after detection.
    */
   detectCurrentLocation: async (autoSearch = true) => {
-    set({ isDetectingLocation: true });
+    set({ isDetectingLocation: true, error: null });
     try {
-      const { latitude, longitude, accuracy } = await getCurrentGpsPosition();
-      const center = makeGpsCenter(latitude, longitude, accuracy, false);
+      const pos = await getCurrentGpsPosition();
+      let detectedName = 'Your Live GPS Location';
+      let formattedAddress = '';
+
+      // Reverse-geocode to find friendly neighborhood / city name
+      try {
+        const rev = await reverseGeocodeCoords(pos.latitude, pos.longitude);
+        if (rev?.name && rev.name !== 'Current Location') {
+          detectedName = rev.name;
+          formattedAddress = rev.formattedAddress || '';
+        }
+      } catch (_) {}
+
+      const center = makeGpsCenter(pos.latitude, pos.longitude, pos.accuracy, false, detectedName, formattedAddress);
       set({
         searchCenter: center,
-        userGps: { latitude, longitude, accuracy },
-        latitude,
-        longitude,
-        locationName: 'Your Live GPS Location',
+        userGps: { latitude: pos.latitude, longitude: pos.longitude, accuracy: pos.accuracy },
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        locationName: detectedName,
         locationPermissionGranted: true,
         isDetectingLocation: false,
         error: null,
       });
+
       if (autoSearch) {
         await get().searchNearby();
       }
-      return { latitude, longitude, accuracy };
-    } catch (err) {
-      console.log('GPS detection note (using fallback):', err.message);
+      return {
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        accuracy: pos.accuracy,
+        name: detectedName,
+        formattedAddress,
+        isIpFallback: false,
+      };
+    } catch (gpsErr) {
+      console.warn('Device GPS unavailable:', gpsErr.message);
       set({ isDetectingLocation: false });
-      if (get().businesses.length === 0 && autoSearch) {
-        await get().searchNearby();
-      }
-      return null;
+      const err = new Error(gpsErr.message || 'GPS location unavailable');
+      throw err;
     }
   },
 
@@ -284,21 +303,48 @@ export const useShopStore = create((set, get) => ({
         return [];
       }
 
-      const rawPlaces = res.data.businesses || [];
+      const rawPlaces = res.data?.businesses || [];
+      const finalPlaces = rawPlaces;
 
-      // Strict client-side Place validation & Haversine distance double-check
-      const validated = rawPlaces
-        .filter((p) => p && (p.external_place_id || p.id) && typeof p.latitude === 'number' && typeof p.longitude === 'number')
-        .filter((p) => {
-          const status = (p.business_status || '').toUpperCase().trim();
-          return status !== 'CLOSED_PERMANENTLY' && status !== 'PERMANENTLY_CLOSED' && status !== 'CLOSED';
-        })
-        .map((p) => {
-          const exactDist = calculateDistance(latNum, lngNum, p.latitude, p.longitude);
-          return { ...p, distance_km: exactDist != null ? exactDist : p.distance_km };
-        })
-        .filter((p) => p.distance_km != null && p.distance_km <= radNum)
-        .sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
+      // Strict client-side Place validation, deduplication & Haversine distance calculation
+      const seenBizIds = new Set();
+      const seenBizKeys = new Set();
+      const validated = [];
+
+      for (const p of finalPlaces) {
+        if (!p || (!p.external_place_id && !p.id)) continue;
+        if (typeof p.latitude !== 'number' || typeof p.longitude !== 'number') continue;
+
+        const status = (p.business_status || 'OPERATIONAL').toUpperCase().trim();
+        if (status !== 'OPERATIONAL' || status === 'CLOSED_PERMANENTLY' || status === 'PERMANENTLY_CLOSED' || status === 'CLOSED' || status === 'CLOSED_TEMPORARILY' || status === 'TEMPORARILY_CLOSED') continue;
+
+        const nameLower = (p.name || '').toLowerCase();
+        if (nameLower.includes('(permanently closed)') || nameLower.includes('[permanently closed]') || nameLower.includes('(closed)') || nameLower.includes('closed permanently')) continue;
+
+        const bizId = p.id || p.external_place_id;
+        const normKey = `${(p.name || '').trim().toLowerCase()}|${p.latitude.toFixed(4)}|${p.longitude.toFixed(4)}`;
+
+        if (seenBizIds.has(bizId) || seenBizKeys.has(normKey)) {
+          continue;
+        }
+
+        const exactDist = calculateDistance(latNum, lngNum, p.latitude, p.longitude);
+        const distKm = exactDist != null ? exactDist : (p.distance_km || 0);
+
+        if (distKm > radNum) {
+          continue;
+        }
+
+        seenBizIds.add(bizId);
+        seenBizKeys.add(normKey);
+
+        validated.push({
+          ...p,
+          distance_km: distKm
+        });
+      }
+
+      validated.sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
 
       // Dynamic category counters based strictly on final validated results
       const totalCount = validated.length;

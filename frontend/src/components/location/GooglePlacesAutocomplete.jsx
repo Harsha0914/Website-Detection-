@@ -5,12 +5,10 @@ import api from '../../services/api';
 // Instant client-side location index for ultra-fast instant suggestions
 const POPULAR_LOCATIONS = [
   // Andhra Pradesh — Major Cities, Towns & Regional Hubs
+  { place_id: 'loc_ap_rajampet', name: 'Rajampet', description: 'Rajampet, Annamayya District, Andhra Pradesh, India', lat: 14.1936, lng: 79.1586 },
   { place_id: 'loc_ap_kodur', name: 'Railway Kodur', description: 'Railway Kodur (Koduru), Annamayya District, Andhra Pradesh, India', lat: 13.9574, lng: 79.3488 },
-  { place_id: 'loc_ap_koduru', name: 'Kodur', description: 'Koduru (Railway Kodur), Annamayya / Kadapa, Andhra Pradesh, India', lat: 13.9574, lng: 79.3488 },
   { place_id: 'loc_ap_puttur', name: 'Puttur', description: 'Puttur (AP), Tirupati / Chittoor District, Andhra Pradesh, India', lat: 13.4381, lng: 79.5522 },
   { place_id: 'loc_ap_tirupati', name: 'Tirupati', description: 'Tirupati, Andhra Pradesh, India', lat: 13.6288, lng: 79.4192 },
-  { place_id: 'loc_ap_rajampet', name: 'Rajampet', description: 'Rajampet, Annamayya District, Andhra Pradesh, India', lat: 14.1936, lng: 79.1586 },
-  { place_id: 'loc_ap_rajampeta', name: 'Rajampeta', description: 'Rajampeta, YSR Kadapa / Annamayya, Andhra Pradesh, India', lat: 14.1936, lng: 79.1586 },
   { place_id: 'loc_ap_kadapa', name: 'Kadapa', description: 'Kadapa (Cuddapah), YSR District, Andhra Pradesh, India', lat: 14.4673, lng: 78.8242 },
   { place_id: 'loc_ap_madanapalle', name: 'Madanapalle', description: 'Madanapalle, Annamayya District, Andhra Pradesh, India', lat: 13.5560, lng: 78.5010 },
   { place_id: 'loc_ap_chittoor', name: 'Chittoor', description: 'Chittoor, Andhra Pradesh, India', lat: 13.2172, lng: 79.1003 },
@@ -37,9 +35,7 @@ const POPULAR_LOCATIONS = [
   { place_id: 'loc_ap_amaravati', name: 'Amaravati', description: 'Amaravati, Andhra Pradesh, India', lat: 16.5131, lng: 80.5160 },
 
   // Bangalore / Bengaluru / Karnataka
-  { place_id: 'loc_ka_bengaluru', name: 'Bengaluru', description: 'Bengaluru (Bangalore), Karnataka, India', lat: 12.9716, lng: 77.5946 },
   { place_id: 'loc_ka_bangalore', name: 'Bangalore', description: 'Bangalore (Bengaluru), Karnataka, India', lat: 12.9716, lng: 77.5946 },
-  { place_id: 'loc_ka_banglore', name: 'Banglore', description: 'Bangalore (Bengaluru), Karnataka, India', lat: 12.9716, lng: 77.5946 },
   { place_id: 'loc_ka_whitefield', name: 'Whitefield', description: 'Whitefield, Bengaluru, Karnataka, India', lat: 12.9698, lng: 77.7500 },
   { place_id: 'loc_ka_koramangala', name: 'Koramangala', description: 'Koramangala, Bengaluru, Karnataka, India', lat: 12.9352, lng: 77.6245 },
   { place_id: 'loc_ka_indiranagar', name: 'Indiranagar', description: 'Indiranagar, Bengaluru, Karnataka, India', lat: 12.9784, lng: 77.6408 },
@@ -49,7 +45,6 @@ const POPULAR_LOCATIONS = [
 
   // Chennai / Tamil Nadu
   { place_id: 'loc_tn_chennai', name: 'Chennai', description: 'Chennai (Madras), Tamil Nadu, India', lat: 13.0827, lng: 80.2707 },
-  { place_id: 'loc_tn_madras', name: 'Madras', description: 'Chennai (Madras), Tamil Nadu, India', lat: 13.0827, lng: 80.2707 },
   { place_id: 'loc_tn_t_nagar', name: 'T. Nagar', description: 'T. Nagar, Chennai, Tamil Nadu, India', lat: 13.0418, lng: 80.2341 },
   { place_id: 'loc_tn_anna_nagar', name: 'Anna Nagar', description: 'Anna Nagar, Chennai, Tamil Nadu, India', lat: 13.0850, lng: 80.2101 },
   { place_id: 'loc_tn_velachery', name: 'Velachery', description: 'Velachery, Chennai, Tamil Nadu, India', lat: 12.9790, lng: 80.2185 },
@@ -99,7 +94,7 @@ export function GooglePlacesAutocomplete({
   const debounceTimer = useRef(null);
   const requestIdRef = useRef(0);
 
-  // Filter client-side instant matches with alias mapping
+  // Filter client-side instant matches with alias mapping and deduplication
   const getInstantLocalMatches = (query) => {
     if (!query || query.trim().length === 0) return [];
     const q = query.toLowerCase().trim();
@@ -110,18 +105,30 @@ export function GooglePlacesAutocomplete({
       vizag: 'visakhapatnam',
       cuddapah: 'kadapa',
       rajampeta: 'rajampet',
+      koduru: 'kodur',
+      'railway koduru': 'railway kodur',
       ap: 'andhra pradesh',
       andhra: 'andhra pradesh',
     };
     const eq = aliasMap[q] || q;
+    const seen = new Set();
+    const results = [];
 
-    return POPULAR_LOCATIONS.filter(
-      (loc) =>
+    for (const loc of POPULAR_LOCATIONS) {
+      if (
         loc.name.toLowerCase().includes(q) ||
         loc.description.toLowerCase().includes(q) ||
         loc.name.toLowerCase().includes(eq) ||
         loc.description.toLowerCase().includes(eq)
-    );
+      ) {
+        const key = `${loc.lat.toFixed(3)},${loc.lng.toFixed(3)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push(loc);
+        }
+      }
+    }
+    return results;
   };
 
   useEffect(() => {
@@ -175,11 +182,21 @@ export function GooglePlacesAutocomplete({
       if (currentRequestId !== requestIdRef.current) return;
 
       const apiData = res.data || [];
-      // Merge API results with local matches, avoiding duplicates
-      const combined = [...apiData];
-      for (const loc of localMatches) {
-        if (!combined.some((item) => item.place_id === loc.place_id || item.description === loc.description)) {
-          combined.push(loc);
+      // Merge API results with local matches, strictly avoiding duplicates by coords and description
+      const seenKeys = new Set();
+      const combined = [];
+
+      for (const item of [...apiData, ...localMatches]) {
+        if (!item) continue;
+        const coordKey = (item.lat != null && item.lng != null)
+          ? `${Number(item.lat).toFixed(3)},${Number(item.lng).toFixed(3)}`
+          : item.place_id || item.description;
+        const descKey = (item.description || item.name || '').toLowerCase().trim();
+
+        if (!seenKeys.has(coordKey) && !seenKeys.has(descKey)) {
+          seenKeys.add(coordKey);
+          seenKeys.add(descKey);
+          combined.push(item);
         }
       }
 

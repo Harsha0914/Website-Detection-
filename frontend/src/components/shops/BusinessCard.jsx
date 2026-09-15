@@ -209,11 +209,15 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
               e.stopPropagation();
               launchWhatsAppApp(business);
             }}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-extrabold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-xl transition-all shadow-sm shadow-emerald-500/20 active:scale-95 cursor-pointer"
-            title={`Chat with ${business.name} on WhatsApp`}
+            className={`flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-extrabold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer ${
+              !hasWebsite
+                ? 'text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400/40'
+                : 'text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/20'
+            }`}
+            title={!hasWebsite ? `Directly open WhatsApp and send website pitch to ${business.name}` : `Chat with ${business.name} on WhatsApp`}
           >
-            <MessageCircle className="w-3.5 h-3.5 text-emerald-100" />
-            <span>WhatsApp</span>
+            <MessageCircle className="w-3.5 h-3.5 text-emerald-100 animate-pulse" />
+            <span>{!hasWebsite ? '⚡ Send WhatsApp Pitch' : 'WhatsApp'}</span>
           </button>
 
         {hasWebsite ? (

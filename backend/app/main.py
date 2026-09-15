@@ -30,6 +30,9 @@ Base.metadata.create_all(bind=engine)
 
 def _ensure_sqlite_columns():
     try:
+        # Only run on SQLite
+        if not str(engine.url).startswith("sqlite"):
+            return
         # pyrefly: ignore [missing-import]
         from sqlalchemy import text
         with engine.connect() as conn:
@@ -82,7 +85,7 @@ def _ensure_sqlite_columns():
 
             conn.commit()
     except Exception as e:
-        print(f"SQLite column migration note: {e}")
+        print(f"Database column migration note: {e}")
 
 _ensure_sqlite_columns()
 
@@ -113,7 +116,7 @@ app.add_middleware(
         "http://127.0.0.1",
         "https://vercel.com",
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"https://.*(\.vercel\.app|\.pages\.dev|\.onrender\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

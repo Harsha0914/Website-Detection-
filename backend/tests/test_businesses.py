@@ -1,6 +1,8 @@
 import pytest
+from unittest.mock import patch, AsyncMock
 
-def test_get_nearby_businesses(client, user_token):
+@patch("app.routers.businesses.background_website_sync", new_callable=AsyncMock)
+def test_get_nearby_businesses(mock_sync, client, user_token):
     response = client.get(
         "/api/businesses/nearby?latitude=12.9716&longitude=77.5946&radius_km=10",
         headers={"Authorization": f"Bearer {user_token}"}
@@ -13,8 +15,9 @@ def test_get_nearby_businesses(client, user_token):
     assert "without_websites" in data
     assert len(data["businesses"]) > 0
 
-def test_get_business_detail(client, user_token):
-    # First query nearby to populate mock businesses in DB
+@patch("app.routers.businesses.background_website_sync", new_callable=AsyncMock)
+def test_get_business_detail(mock_sync, client, user_token):
+    # First query nearby to populate businesses in DB
     nearby_res = client.get(
         "/api/businesses/nearby?latitude=12.9716&longitude=77.5946&radius_km=5",
         headers={"Authorization": f"Bearer {user_token}"}

@@ -50,6 +50,7 @@ const CATEGORIES = [
   { value: 'Supermarket', label: 'Supermarket', icon: ShoppingBag, color: '#059669' },
   { value: 'General Store', label: 'General Store', icon: Store, color: '#8b5cf6' },
   { value: 'Department Store', label: 'Department Store', icon: Building2, color: '#6366f1' },
+  { value: 'Meat & Poultry', label: 'Meat & Poultry', icon: Store, color: '#e11d48' },
   { value: 'Pharmacy', label: 'Pharmacy', icon: Pill, color: '#ef4444' },
   { value: 'Bakery', label: 'Bakery', icon: Coffee, color: '#f59e0b' },
   { value: 'Clothing Store', label: 'Clothing Store', icon: Shirt, color: '#ec4899' },
@@ -71,6 +72,16 @@ const CATEGORIES = [
 ];
 
 const PRESET_DISTANCES = [0.5, 1, 2, 5, 10, 20, 30, 50];
+
+const QUICK_TOWNS = [
+  { name: 'Rajampet', lat: 14.1936, lng: 79.1586, full: 'Rajampet, Annamayya District, Andhra Pradesh, India' },
+  { name: 'Railway Kodur', lat: 13.9574, lng: 79.3488, full: 'Railway Kodur, Annamayya District, Andhra Pradesh, India' },
+  { name: 'Tirupati', lat: 13.6288, lng: 79.4192, full: 'Tirupati, Andhra Pradesh, India' },
+  { name: 'Kadapa', lat: 14.4673, lng: 78.8242, full: 'Kadapa, YSR District, Andhra Pradesh, India' },
+  { name: 'Puttur', lat: 13.4381, lng: 79.5522, full: 'Puttur, Tirupati / Chittoor, Andhra Pradesh, India' },
+  { name: 'Hyderabad', lat: 17.3850, lng: 78.4867, full: 'Hyderabad, Telangana, India' },
+  { name: 'Bangalore', lat: 12.9716, lng: 77.5946, full: 'Bangalore, Karnataka, India' },
+];
 
 const QUICK_LINKS = [
   {
@@ -157,22 +168,27 @@ export default function UserDashboard() {
 
   useEffect(() => {
     checkGoogleStatus();
-    if (!locationPermissionGranted) {
-      handleDetectLocation(false);
-    }
   }, []);
 
   const handleDetectLocation = async (autoSearch = true) => {
-    setLocationStatus('Acquiring GPS…');
+    setLocationStatus('Acquiring device GPS…');
     setIsTyping(false);
     try {
       const pos = await detectCurrentLocation(autoSearch);
       setForceInputValue('');
-      setLocationStatus(`GPS locked ±${pos.accuracy ?? '<10'} m`);
-      setActiveStep(2);
-      setTimeout(() => setLocationStatus(''), 4000);
+      if (pos) {
+        const accuracyText = pos.accuracy ? `(±${pos.accuracy} m)` : '';
+        setLocationStatus(`📍 GPS locked: ${pos.name || 'Your Location'} ${accuracyText}`.trim());
+        setActiveStep(2);
+        setTimeout(() => setLocationStatus(''), 4500);
+      }
     } catch (err) {
-      setLocationStatus(err.message || 'GPS denied. Search by name below.');
+      setLocationStatus(
+        err?.message?.includes('denied')
+          ? '⚠️ Location permission was denied in your browser. Select a town below or search above.'
+          : '⚠️ Device GPS is unavailable on this device/browser. Please select a town below or search above.'
+      );
+      setTimeout(() => setLocationStatus(''), 6000);
     }
   };
 
@@ -933,7 +949,14 @@ export default function UserDashboard() {
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
                   <div className="ud-loc-pill ud-loc-pill-gps">
                     <div className="ud-loc-dot ud-loc-dot-gps" />
-                    <span style={{ fontWeight: 700, color: '#059669' }}>📍 Using Current GPS Location</span>
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                      <span style={{ fontWeight: 700, color: '#059669' }}>
+                        📍 {searchCenter.name || 'Current Location'}
+                      </span>
+                      {searchCenter.formattedAddress && searchCenter.formattedAddress !== searchCenter.name && (
+                        <div className="ud-loc-addr" style={{ color: '#047857' }}>{searchCenter.formattedAddress}</div>
+                      )}
+                    </div>
                     <CheckCircle2 style={{ width: 14, height: 14, color: '#10b981', flexShrink: 0 }} />
                   </div>
                 </div>
@@ -946,6 +969,43 @@ export default function UserDashboard() {
                   </div>
                 </div>
               )}
+
+              {/* Quick Select Popular Towns */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 14, alignItems: 'center' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginRight: 2 }}>Quick Towns:</span>
+                {QUICK_TOWNS.map((t) => {
+                  const isCur = searchCenter?.name?.toLowerCase().includes(t.name.toLowerCase());
+                  return (
+                    <button
+                      key={t.name}
+                      type="button"
+                      onClick={() => handlePlaceSelect({
+                        type: 'place',
+                        placeId: `loc_${t.name.toLowerCase().replace(/\s+/g, '_')}`,
+                        name: t.name,
+                        formattedAddress: t.full,
+                        shortAddress: t.name,
+                        latitude: t.lat,
+                        longitude: t.lng,
+                      })}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 9999,
+                        fontSize: 11,
+                        fontWeight: isCur ? 800 : 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        border: isCur ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+                        background: isCur ? '#ede9fe' : '#ffffff',
+                        color: isCur ? '#4338ca' : '#475569',
+                        boxShadow: isCur ? '0 2px 6px rgba(99, 102, 241, 0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
+                      }}
+                    >
+                      📍 {t.name}
+                    </button>
+                  );
+                })}
+              </div>
             </>
           )}
         </div>

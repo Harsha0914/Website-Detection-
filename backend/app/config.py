@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.CORS_ORIGINS.split(",")]
 
     # Google Places
-    GOOGLE_PLACES_API_KEY: str = ""
+    GOOGLE_PLACES_API_KEY: str = "AIzaSyCpffOtfEnMdrrv16_xnVxacUa1MgUMpvk"
     USE_MOCK_PLACES: bool = False
 
     # Gemini AI

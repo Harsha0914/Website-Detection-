@@ -74,7 +74,48 @@ def generate_ai_response(
     cat = business_category or "Local Business"
     lower_msg = user_message.lower().strip()
 
-    # Try Gemini AI if configured
+    # 1. Try OpenAI AI if configured
+    openai_key = getattr(settings, 'OPENAI_API_KEY', '')
+    if openai_key and openai_key.strip() and not getattr(settings, 'USE_RULE_BASED_CHAT', False):
+        try:
+            import requests
+            base_url = getattr(settings, 'OPENAI_BASE_URL', 'https://api.openai.com/v1').rstrip('/')
+            model_name = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
+            url = f"{base_url}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {openai_key.strip()}",
+                "Content-Type": "application/json"
+            }
+            system_instruction = (
+                f"You are the official AI Website Consultant for 'Lexon IT' (Website Presence Detection & Modern Web Design Company). "
+                f"You are chatting with the owner/manager of '{name}', which is a '{cat}'. "
+                f"Lexon IT specializes in high-quality, mobile-friendly websites, online ordering, and digital presence at very low, affordable cost (packages from ₹2,999 to ₹7,999) with guaranteed 100% customer satisfaction and 48-hour delivery. "
+                f"Your goal is to politely answer the shop owner's questions, explain website features, provide pricing details, offer custom design demos, and guide them to build/improve their website with Lexon IT. "
+                f"Format your response cleanly with WhatsApp-friendly styling (bullet points, bold key terms, friendly emojis). "
+                f"Keep responses concise (under 120 words), professional, and persuasive."
+            )
+            openai_messages = [{"role": "system", "content": system_instruction}]
+            for msg in history[-6:]:
+                role = "assistant" if msg.get("sender") == "ASSISTANT" else "user"
+                openai_messages.append({"role": role, "content": msg.get("text", "")})
+            openai_messages.append({"role": "user", "content": user_message})
+
+            payload = {
+                "model": model_name,
+                "messages": openai_messages,
+                "temperature": 0.7,
+                "max_tokens": 250
+            }
+            res = requests.post(url, headers=headers, json=payload, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                reply_text = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                if reply_text:
+                    return reply_text
+        except Exception as e:
+            print("OpenAI API error in chat_service:", e)
+
+    # 2. Try Gemini AI if configured
     if settings.GEMINI_API_KEY and not settings.USE_RULE_BASED_CHAT:
         try:
             genai.configure(api_key=settings.GEMINI_API_KEY)

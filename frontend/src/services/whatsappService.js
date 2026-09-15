@@ -242,5 +242,31 @@ export async function testWhatsAppCloudMessage(to_phone, message) {
   return res.data;
 }
 
+export async function broadcastWhatsAppToAllShops({ shops, customMessage, autoAIEnabled = true }) {
+  const res = await api.post('/ai-whatsapp/broadcast-all', {
+    shops: shops.map(s => ({
+      business_id: s.id || s.business_id,
+      name: s.name || s.shop_name,
+      phone: s.phone || s.phone_number,
+      category: s.category,
+      address: s.address || s.short_address,
+      external_place_id: s.external_place_id || s.place_id,
+    })),
+    custom_message: customMessage,
+    auto_ai_enabled: autoAIEnabled,
+  });
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('whatsapp-updated', {
+      detail: {
+        broadcast: true,
+        count: res.data?.total_sent || shops.length,
+      }
+    }));
+  }
+
+  return res.data;
+}
+
 
 

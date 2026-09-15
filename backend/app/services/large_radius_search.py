@@ -79,7 +79,11 @@ def search_large_area(
 
             for p in places:
                 p_status = (p.business_status or "OPERATIONAL").upper().strip()
-                if p_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED"):
+                if p_status != "OPERATIONAL" or p_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED", "CLOSED_TEMPORARILY", "TEMPORARILY_CLOSED"):
+                    continue
+
+                name_clean = (p.name or "").lower()
+                if any(w in name_clean for w in ["(permanently closed)", "[permanently closed]", "(closed)", "permanently closed", "closed permanently"]):
                     continue
 
                 if p.place_id not in all_places_dict:

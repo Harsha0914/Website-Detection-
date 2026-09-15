@@ -70,6 +70,7 @@ export function WhatsAppChatModal({ business, isOpen, onClose }) {
   const [isEditingSummary, setIsEditingSummary] = useState(false);
   const [extractedDetails, setExtractedDetails] = useState({});
   const [showTestPills, setShowTestPills] = useState(false);
+  const [senderRole, setSenderRole] = useState('SHOP_OWNER');
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -639,65 +640,131 @@ export function WhatsAppChatModal({ business, isOpen, onClose }) {
           )}
         </div>
 
-        {/* ── 5. Lexonity Outreach Pitch Templates & Test Simulator Bar ── */}
-        <div className="p-2 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-            {LEXONITY_AGENCY_PITCHES.map((action) => (
-              <button
-                key={action.id}
-                onClick={() => handleSendMessageAsLexonity(action.query)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-bold shrink-0 border transition-all active:scale-95 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-900 dark:text-blue-200 border-blue-200/70 dark:border-blue-800/60"
-              >
-                <span>{action.label}</span>
-              </button>
-            ))}
+        {/* ── 5. Suggestions & Test Simulation Bar ── */}
+        <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5 items-center">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase shrink-0">
+              {senderRole === 'SHOP_OWNER' ? '⚡ Quick Inquiries:' : '🚀 Outreach Pitches:'}
+            </span>
+            {senderRole === 'SHOP_OWNER' ? (
+              <>
+                <button
+                  onClick={() => handleSimulateShopOwnerReply('Hello! I want a website for my shop. What packages do you have?')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-900 dark:text-emerald-200 border border-emerald-300/70 dark:border-emerald-800/60 shrink-0 transition-all active:scale-95"
+                >
+                  <span>"What packages do you have?"</span>
+                </button>
+                <button
+                  onClick={() => handleSimulateShopOwnerReply('Can you send live demo website links for my business?')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-900 dark:text-blue-200 border border-blue-300/70 dark:border-blue-800/60 shrink-0 transition-all active:scale-95"
+                >
+                  <span>"Show demo links"</span>
+                </button>
+                <button
+                  onClick={() => handleSimulateShopOwnerReply('How much does the Starter website cost and how long does it take?')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 text-purple-900 dark:text-purple-200 border border-purple-300/70 dark:border-purple-800/60 shrink-0 transition-all active:scale-95"
+                >
+                  <span>"Starter price & timing?"</span>
+                </button>
+                <button
+                  onClick={() => handleSimulateShopOwnerReply('Can someone call me to explain details?')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-900 dark:text-amber-200 border border-amber-300/70 dark:border-amber-800/60 shrink-0 transition-all active:scale-95"
+                >
+                  <span>"Call me"</span>
+                </button>
+              </>
+            ) : (
+              LEXONITY_AGENCY_PITCHES.map((action) => (
+                <button
+                  key={action.id}
+                  onClick={() => handleSendMessageAsLexonity(action.query)}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold shrink-0 border transition-all active:scale-95 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-900 dark:text-blue-200 border-blue-200/70 dark:border-blue-800/60"
+                >
+                  <span>{action.label}</span>
+                </button>
+              ))
+            )}
           </div>
-
-          <button
-            onClick={() => setShowTestPills(!showTestPills)}
-            className="text-[11px] font-bold px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 shrink-0 border border-amber-300 dark:border-amber-800"
-            title="Simulate shop owner response to test two-way chat"
-          >
-            🧪 Test Owner Reply
-          </button>
         </div>
 
-        {/* Optional Testing Bar for Simulating Shop Owner's WhatsApp Response */}
-        {showTestPills && (
-          <div className="p-2 bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200/80 dark:border-amber-800/60 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
-            <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase shrink-0">
-              Simulate Reply:
-            </span>
-            {TEST_OWNER_REPLIES.map((test) => (
+        {/* ── 6. Two-Way Message Input Bar with Role Switcher ── */}
+        <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 space-y-2">
+          {/* Role selector tabs */}
+          <div className="flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl">
               <button
-                key={test.id}
-                onClick={() => handleSimulateShopOwnerReply(test.query)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-amber-100 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700 shrink-0 transition-transform active:scale-95"
+                type="button"
+                onClick={() => setSenderRole('SHOP_OWNER')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                  senderRole === 'SHOP_OWNER'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
               >
-                <span>{test.label}</span>
+                <Bot className="w-3.5 h-3.5" />
+                <span>Chat with AI (as Shop Owner)</span>
               </button>
-            ))}
-          </div>
-        )}
+              <button
+                type="button"
+                onClick={() => setSenderRole('LEXONITY_TEAM')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                  senderRole === 'LEXONITY_TEAM'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Send as Lexonity Team</span>
+              </button>
+            </div>
 
-        {/* ── 6. Two-Way Message Input Bar (You send as Lexonity Team) ── */}
-        <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
+            <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">
+              {senderRole === 'SHOP_OWNER' ? '🤖 AI replies immediately' : '👤 Direct manual message'}
+            </span>
+          </div>
+
           <div className="flex items-center gap-2">
             <input
               ref={inputRef}
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessageAsLexonity()}
-              placeholder={`Send message to ${shopName} as Lexonity Team...`}
-              className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && inputText.trim()) {
+                  if (senderRole === 'SHOP_OWNER') {
+                    handleSimulateShopOwnerReply(inputText);
+                    setInputText('');
+                  } else {
+                    handleSendMessageAsLexonity();
+                  }
+                }
+              }}
+              placeholder={
+                senderRole === 'SHOP_OWNER'
+                  ? `Ask AI sales bot as ${shopName} owner (e.g. "What is your website cost?")...`
+                  : `Send manual message to ${shopName} as Lexonity Team...`
+              }
+              className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
             />
 
             <button
-              onClick={() => handleSendMessageAsLexonity()}
+              onClick={() => {
+                if (inputText.trim()) {
+                  if (senderRole === 'SHOP_OWNER') {
+                    handleSimulateShopOwnerReply(inputText);
+                    setInputText('');
+                  } else {
+                    handleSendMessageAsLexonity();
+                  }
+                }
+              }}
               disabled={!inputText.trim()}
-              className="p-2.5 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-2xl shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-              title={`Send message to ${shopName} as Lexonity Team`}
+              className={`p-2.5 text-white rounded-2xl shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center gap-1 text-xs font-bold ${
+                senderRole === 'SHOP_OWNER'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500'
+              }`}
+              title={senderRole === 'SHOP_OWNER' ? 'Send and get instant AI response' : 'Send manual message'}
             >
               <Send className="w-4 h-4" />
             </button>

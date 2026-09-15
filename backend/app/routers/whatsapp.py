@@ -1495,3 +1495,21 @@ def test_whatsapp_cloud_message(
             "error": result,
             "raw_response": raw
         }
+
+
+# =============================================================================
+# 18. BULK AI WHATSAPP BROADCAST (ALIAS)
+# =============================================================================
+
+@router.post("/broadcast-all")
+def broadcast_all_whatsapp_alias(
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Alias for /api/ai-whatsapp/broadcast-all.
+    Dispatches bulk AI WhatsApp website outreach messages to multiple shops.
+    """
+    from app.routers.ai_whatsapp_hub import broadcast_all_whatsapp_shops, BulkWhatsAppBroadcastSchema
+    schema = BulkWhatsAppBroadcastSchema(**payload)
+    return broadcast_all_whatsapp_shops(payload=schema, db=db)

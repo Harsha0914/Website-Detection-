@@ -449,26 +449,26 @@ export default function WhatsAppHubPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[11px] font-bold text-slate-400">⚡ Test Incoming WhatsApp:</span>
                     <button
-                      onClick={() => handleSimulateIncoming('What are your store opening timings?')}
-                      className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+                      onClick={() => handleSimulateIncoming('Hello! I want a website for my shop. What packages do you have?')}
+                      className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-300 rounded-lg transition-colors border border-emerald-300/60 dark:border-emerald-800/60"
                     >
-                      "Store Timings?"
+                      "Packages & Pricing?"
                     </button>
                     <button
-                      onClick={() => handleSimulateIncoming('What are today\'s discounts and offers?')}
-                      className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+                      onClick={() => handleSimulateIncoming('Can you show me live demo website samples?')}
+                      className="px-2.5 py-1 text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 text-blue-800 dark:text-blue-300 rounded-lg transition-colors border border-blue-300/60 dark:border-blue-800/60"
                     >
-                      "Today's Offers?"
+                      "Show Demo Links"
                     </button>
                     <button
-                      onClick={() => handleSimulateIncoming('How can I order on WhatsApp for home delivery?')}
-                      className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+                      onClick={() => handleSimulateIncoming('How much does the Starter website cost and how many days will it take?')}
+                      className="px-2.5 py-1 text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 text-purple-800 dark:text-purple-300 rounded-lg transition-colors border border-purple-300/60 dark:border-purple-800/60"
                     >
-                      "WhatsApp Delivery?"
+                      "Starter Cost & Timing?"
                     </button>
                     <button
-                      onClick={() => handleSimulateIncoming('I want to speak with the human manager.')}
-                      className="px-2.5 py-1 text-[11px] font-semibold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-lg transition-colors"
+                      onClick={() => handleSimulateIncoming('I would like to speak with the human manager.')}
+                      className="px-2.5 py-1 text-[11px] font-semibold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-lg transition-colors border border-amber-300/60 dark:border-amber-800/60"
                     >
                       "Talk to Human Manager"
                     </button>

@@ -140,3 +140,82 @@ def test_location_accurate_search_rajampeta():
         assert "Hitec City" not in p.address
         assert "Mindspace" not in p.address
         assert "Hyderabad" not in p.address
+
+
+def test_exclude_permanently_and_temporarily_closed_places():
+    origin_lat, origin_lng = 17.4486, 78.3908
+    radius_km = 5.0
+    api_key = "test_key"
+
+    # Permanently closed place
+    closed_perm = {
+        "id": "place_closed_perm",
+        "displayName": {"text": "Closed Boutique"},
+        "location": {"latitude": 17.4500, "longitude": 78.3920},
+        "types": ["clothing_store"],
+        "businessStatus": "CLOSED_PERMANENTLY"
+    }
+    p_perm, entry_perm = _parse_google_place(closed_perm, origin_lat, origin_lng, radius_km, api_key)
+    assert p_perm is None
+    assert entry_perm["included"] is False
+    assert "Excluded closed/inactive shop" in entry_perm["reason"]
+
+    # Temporarily closed place
+    closed_temp = {
+        "id": "place_closed_temp",
+        "displayName": {"text": "Temporary Closed Cafe"},
+        "location": {"latitude": 17.4500, "longitude": 78.3920},
+        "types": ["cafe"],
+        "businessStatus": "CLOSED_TEMPORARILY"
+    }
+    p_temp, entry_temp = _parse_google_place(closed_temp, origin_lat, origin_lng, radius_km, api_key)
+    assert p_temp is None
+    assert entry_temp["included"] is False
+    assert "Excluded closed/inactive shop" in entry_temp["reason"]
+
+    # Place with permanently closed in name
+    closed_by_name = {
+        "id": "place_closed_name",
+        "displayName": {"text": "Sai Bakery (Permanently Closed)"},
+        "location": {"latitude": 17.4500, "longitude": 78.3920},
+        "types": ["bakery"],
+        "businessStatus": "OPERATIONAL"
+    }
+    p_name, entry_name = _parse_google_place(closed_by_name, origin_lat, origin_lng, radius_km, api_key)
+    assert p_name is None
+    assert entry_name["included"] is False
+
+
+def test_restaurant_categorization_and_isolation():
+    from app.services.places_service import infer_canonical_category, is_category_matching
+
+    # Infer category for restaurants
+    assert infer_canonical_category(["store"], None, "Grand Bawarchi Multi-Cuisine Restaurant") == "Restaurant"
+    assert infer_canonical_category(["food_court"], None, "Sri Durga Tiffins & Fast Food") == "Restaurant"
+    assert infer_canonical_category([], None, "Hotel Saravana Bhavan Veg") == "Restaurant"
+    assert infer_canonical_category([], None, "Hyderabad Biryani House") == "Restaurant"
+
+    # Strict category matching
+    assert is_category_matching("Restaurant", "Restaurant") is True
+    assert is_category_matching("Restaurant", "Grocery Store") is False
+    assert is_category_matching("Restaurant", "Clothing Store") is False
+    assert is_category_matching("Restaurant", "Pharmacy") is False
+
+    assert is_category_matching("Grocery Store", "Restaurant") is False
+    assert is_category_matching("Clothing Store", "Restaurant") is False
+    assert is_category_matching("Pharmacy", "Restaurant") is False
+    assert is_category_matching("Meat & Poultry", "Restaurant") is False
+    assert is_category_matching("Restaurant", "Meat & Poultry") is False
+
+    # Chicken centre & raw meat shops are Meat & Poultry, not Restaurant
+    assert infer_canonical_category([], None, "SLV CHICKEN CENTRE") == "Meat & Poultry"
+    assert infer_canonical_category([], None, "AR CHICKEN CENTER") == "Meat & Poultry"
+    assert infer_canonical_category([], None, "Samreen Chicken & Mutton Shop") == "Meat & Poultry"
+    assert infer_canonical_category([], None, "B GNANESWAR MUTTON SHOP") == "Meat & Poultry"
+    assert infer_canonical_category([], None, "Royal Fish Market") == "Meat & Poultry"
+
+    # Cooked chicken food establishments remain Restaurant
+    assert infer_canonical_category([], None, "Five Star Fried Chicken") == "Restaurant"
+    assert infer_canonical_category([], None, "Shahi Chicken Pakoda") == "Restaurant"
+    assert infer_canonical_category([], None, "Paradise Chicken Biryani") == "Restaurant"
+

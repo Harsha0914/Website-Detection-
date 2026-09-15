@@ -15,9 +15,9 @@ export function getCurrentGpsPosition(options = {}) {
     }
 
     const defaultOptions = {
-      enableHighAccuracy: false,
-      timeout: 4000,
-      maximumAge: 60000,
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0,
       ...options,
     };
 
@@ -30,6 +30,7 @@ export function getCurrentGpsPosition(options = {}) {
           latitude,
           longitude,
           accuracy,
+          isIpFallback: false,
         });
       },
       (err) => {
@@ -39,19 +40,95 @@ export function getCurrentGpsPosition(options = {}) {
             message = 'Location permission was denied. Please allow location access in your browser.';
             break;
           case err.POSITION_UNAVAILABLE:
-            message = 'Location information is currently unavailable.';
+            message = 'GPS location information is currently unavailable.';
             break;
           case err.TIMEOUT:
-            message = 'Location request timed out. Please try again.';
+            message = 'Location request timed out.';
             break;
           default:
             message = err.message || message;
         }
-        reject(new Error(message));
+        const error = new Error(message);
+        error.code = err.code;
+        reject(error);
       },
       defaultOptions
     );
   });
+}
+
+/**
+ * Fallback to IP-based geolocation if browser GPS is unavailable or blocked.
+ * @returns {Promise<{latitude: number, longitude: number, accuracy: number, name: string, isIpFallback: boolean}|null>}
+ */
+export async function getIpFallbackPosition() {
+  try {
+    const res = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.latitude && data.longitude) {
+        const cityName = [data.city, data.region].filter(Boolean).join(', ');
+        return {
+          latitude: parseFloat(Number(data.latitude).toFixed(6)),
+          longitude: parseFloat(Number(data.longitude).toFixed(6)),
+          accuracy: 5000,
+          name: cityName || 'Approximate Location',
+          isIpFallback: true,
+        };
+      }
+    }
+  } catch (_) {}
+
+  try {
+    const res2 = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) });
+    if (res2.ok) {
+      const data = await res2.json();
+      if (data.latitude && data.longitude) {
+        const cityName = [data.city, data.region].filter(Boolean).join(', ');
+        return {
+          latitude: parseFloat(Number(data.latitude).toFixed(6)),
+          longitude: parseFloat(Number(data.longitude).toFixed(6)),
+          accuracy: 5000,
+          name: cityName || 'Approximate Location',
+          isIpFallback: true,
+        };
+      }
+    }
+  } catch (_) {}
+
+  return null;
+}
+
+/**
+ * Reverse geocodes coordinates to a readable human name (e.g. "Kukatpally, Hyderabad").
+ * @param {number} latitude
+ * @param {number} longitude
+ * @returns {Promise<{name: string, formattedAddress: string}>}
+ */
+export async function reverseGeocodeCoords(latitude, longitude) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`,
+      {
+        headers: { 'Accept-Language': 'en' },
+        signal: AbortSignal.timeout(3500),
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const addr = data.address || {};
+      const neighborhood = addr.suburb || addr.neighbourhood || addr.residential || addr.quarter || addr.subdistrict;
+      const city = addr.city || addr.town || addr.village || addr.county || addr.state_district;
+      const state = addr.state;
+      const parts = [neighborhood, city, state].filter(Boolean);
+      const shortName = parts.length > 0 ? parts.slice(0, 2).join(', ') : (data.display_name?.split(',').slice(0, 2).join(', ') || 'Current Location');
+      return {
+        name: shortName,
+        formattedAddress: data.display_name || '',
+      };
+    }
+  } catch (_) {}
+  return { name: 'Current Location', formattedAddress: '' };
 }
 
 /**
