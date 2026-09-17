@@ -53,10 +53,21 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email_clean).first()
     
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account not found with this email. Please register first."
+        )
     
     if not verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password. Please check your password and try again."
+        )
+
+    # Auto-upgrade plain or legacy hash to fresh bcrypt hash if needed
+    if not user.password_hash.startswith("$2"):
+        user.password_hash = hash_password(req.password)
+        db.commit()
 
     if not user.is_active:
         user.is_active = True
