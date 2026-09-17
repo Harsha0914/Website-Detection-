@@ -11,33 +11,18 @@ export const useAuthStore = create((set, get) => ({
   login: async (email, password) => {
     set({ loading: true, error: null });
     try {
-      let data;
-      try {
-        const res = await api.post('/auth/login', { email: email.trim().toLowerCase(), password }, { timeout: 30000 });
-        data = res.data;
-      } catch (axiosErr) {
-        console.warn('Axios login attempt failed, attempting fallback fetch...', axiosErr);
-        const baseUrl = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : 'http://localhost:8001';
-        const fetchUrl = `${baseUrl.replace(/\/+$/, '')}/api/auth/login`;
-        const fetchRes = await fetch(fetchUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
-        });
-        if (!fetchRes.ok) {
-          const errBody = await fetchRes.json().catch(() => ({}));
-          const errorMsg = errBody.detail || `Server responded with status ${fetchRes.status}`;
-          throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
-        }
-        data = await fetchRes.json();
-      }
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const res = await api.post('/auth/login', { email: cleanEmail, password });
+      const data = res.data;
 
       const { access_token, refresh_token, role, full_name, user_id } = data;
-      const userInfo = { id: user_id, email: email.trim().toLowerCase(), full_name, role };
+      const userInfo = { id: user_id, email: cleanEmail, full_name, role };
 
       try {
         localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', refresh_token);
+        if (refresh_token) {
+          localStorage.setItem('refresh_token', refresh_token);
+        }
         localStorage.setItem('user_info', JSON.stringify(userInfo));
       } catch (storageErr) {
         console.warn('LocalStorage write warning:', storageErr);
@@ -54,18 +39,20 @@ export const useAuthStore = create((set, get) => ({
       return userInfo;
     } catch (err) {
       let msg = 'Failed to login. Please check your credentials.';
-      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        msg = 'Connection timed out. Please check that your FastAPI backend is running and reachable.';
-      } else if (err.message === 'Network Error' || !err.response) {
-        msg = 'Network Error: Backend server unreachable. Check that your FastAPI server/tunnel is active.';
-      } else if (err.response?.data?.detail) {
+      if (err.response?.data?.detail) {
         if (Array.isArray(err.response.data.detail)) {
-          msg = err.response.data.detail.map((d) => d.msg || d.message).join(', ');
-        } else {
+          msg = err.response.data.detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(', ');
+        } else if (typeof err.response.data.detail === 'string') {
           msg = err.response.data.detail;
+        } else {
+          msg = JSON.stringify(err.response.data.detail);
         }
-      } else if (err.response?.status === 405 || err.response?.status === 502) {
-        msg = 'Backend server endpoint not reachable. Please make sure FastAPI backend is running on port 8001.';
+      } else if (err.response?.status === 401) {
+        msg = 'Invalid email or password. Please verify your credentials or register a new account.';
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        msg = 'Connection timed out. Please check your internet connection and try again.';
+      } else if (err.message === 'Network Error' || (err.isAxiosError && !err.response)) {
+        msg = 'Network Error: Cannot connect to server. Please check your internet connection.';
       } else if (err.message) {
         msg = err.message;
       }
@@ -77,9 +64,10 @@ export const useAuthStore = create((set, get) => ({
   register: async ({ full_name, email, phone, password, confirm_password, role = 'USER', admin_code = '' }) => {
     set({ loading: true, error: null });
     try {
-      await api.post('/auth/register', {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const res = await api.post('/auth/register', {
         full_name,
-        email,
+        email: cleanEmail,
         phone,
         password,
         confirm_password,
@@ -87,16 +75,21 @@ export const useAuthStore = create((set, get) => ({
         admin_code,
       });
       set({ loading: false, error: null });
+      return res.data;
     } catch (err) {
-      let msg = 'Registration failed. Please check your connection and try again.';
+      let msg = 'Registration failed. Please check your details and try again.';
       if (err.response?.data?.detail) {
         if (Array.isArray(err.response.data.detail)) {
-          msg = err.response.data.detail.map((d) => d.msg || d.message).join(', ');
-        } else {
+          msg = err.response.data.detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(', ');
+        } else if (typeof err.response.data.detail === 'string') {
           msg = err.response.data.detail;
+        } else {
+          msg = JSON.stringify(err.response.data.detail);
         }
-      } else if (err.response?.status === 405) {
-        msg = 'Backend server endpoint not reachable. Please make sure FastAPI backend is running on port 8000.';
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        msg = 'Connection timed out. Please check your internet connection and try again.';
+      } else if (err.message === 'Network Error' || (err.isAxiosError && !err.response)) {
+        msg = 'Network Error: Cannot connect to server. Please check your internet connection.';
       } else if (err.message) {
         msg = err.message;
       }
