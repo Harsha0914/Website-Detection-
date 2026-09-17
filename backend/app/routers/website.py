@@ -19,6 +19,39 @@ from app.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/websites", tags=["Websites & Analysis"])
 
+@router.post("/requests", response_model=WebsiteRequestOut, status_code=status.HTTP_201_CREATED)
+def create_website_request(
+    req: WebsiteRequestCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    biz = db.query(Business).filter(Business.id == req.business_id).first()
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    request_record = WebsiteRequest(
+        user_id=current_user.id,
+        business_id=biz.id,
+        status=RequestStatus.PENDING,
+        message=req.message
+    )
+    db.add(request_record)
+    db.commit()
+    db.refresh(request_record)
+    return request_record
+
+@router.get("/requests/my", response_model=list[WebsiteRequestOut])
+def get_my_website_requests(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return (
+        db.query(WebsiteRequest)
+        .filter(WebsiteRequest.user_id == current_user.id)
+        .order_by(WebsiteRequest.created_at.desc())
+        .all()
+    )
+
 @router.get("/{business_id}", response_model=WebsiteAnalysisOut)
 def get_website_analysis(business_id: int, db: Session = Depends(get_db)):
     wa = db.query(WebsiteAnalysis).filter(WebsiteAnalysis.business_id == business_id).first()
@@ -83,35 +116,3 @@ async def trigger_analysis(
     db.refresh(wa)
     return wa
 
-@router.post("/requests", response_model=WebsiteRequestOut, status_code=status.HTTP_201_CREATED)
-def create_website_request(
-    req: WebsiteRequestCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    biz = db.query(Business).filter(Business.id == req.business_id).first()
-    if not biz:
-        raise HTTPException(status_code=404, detail="Business not found")
-
-    request_record = WebsiteRequest(
-        user_id=current_user.id,
-        business_id=biz.id,
-        status=RequestStatus.PENDING,
-        message=req.message
-    )
-    db.add(request_record)
-    db.commit()
-    db.refresh(request_record)
-    return request_record
-
-@router.get("/requests/my", response_model=list[WebsiteRequestOut])
-def get_my_website_requests(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return (
-        db.query(WebsiteRequest)
-        .filter(WebsiteRequest.user_id == current_user.id)
-        .order_by(WebsiteRequest.created_at.desc())
-        .all()
-    )

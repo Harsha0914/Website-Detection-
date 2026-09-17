@@ -23,8 +23,12 @@ export function getCurrentGpsPosition(options = {}) {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const latitude = parseFloat(pos.coords.latitude.toFixed(6));
-        const longitude = parseFloat(pos.coords.longitude.toFixed(6));
+        if (!pos || !pos.coords) {
+          reject(new Error('Location coordinates were unavailable.'));
+          return;
+        }
+        const latitude = parseFloat((pos.coords.latitude || 0).toFixed(6));
+        const longitude = parseFloat((pos.coords.longitude || 0).toFixed(6));
         const accuracy = Math.round(pos.coords.accuracy || 0);
         resolve({
           latitude,

@@ -439,14 +439,6 @@ def get_place_details(place_id: str = Query(...)):
 def get_needs_improvement(db: Session = Depends(get_db)):
     return db.query(Business).filter(Business.website_quality.in_([WebsiteQuality.NEEDS_IMPROVEMENT, WebsiteQuality.AVERAGE, WebsiteQuality.POOR])).all()
 
-@router.get("/{business_id}", response_model=BusinessOut)
-def get_business(business_id: int, db: Session = Depends(get_db)):
-    biz = db.query(Business).filter(Business.id == business_id).first()
-    if not biz:
-        raise HTTPException(status_code=404, detail="Business not found")
-    return biz
-
-
 # ─── Google Places API Key Management ─────────────────────────────────────────
 
 # pyrefly: ignore [missing-import]
@@ -483,4 +475,12 @@ def update_google_key(req: GoogleKeyRequest):
     except Exception as ex:
         print("Failed writing to .env:", ex)
     return {"status": "success", "connected": bool(new_key)}
+
+@router.get("/{business_id}", response_model=BusinessOut)
+def get_business(business_id: int, db: Session = Depends(get_db)):
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    if not biz:
+        raise HTTPException(status_code=404, detail="Business not found")
+    return biz
+
 

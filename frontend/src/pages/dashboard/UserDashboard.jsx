@@ -176,15 +176,16 @@ export default function UserDashboard() {
     try {
       const pos = await detectCurrentLocation(autoSearch);
       setForceInputValue('');
-      if (pos) {
-        const accuracyText = pos.accuracy ? `(±${pos.accuracy} m)` : '';
-        setLocationStatus(`📍 GPS locked: ${pos.name || 'Your Location'} ${accuracyText}`.trim());
+      if (pos && typeof pos === 'object') {
+        const accuracyText = pos?.accuracy ? `(±${pos.accuracy} m)` : '';
+        setLocationStatus(`📍 GPS locked: ${pos?.name || 'Your Location'} ${accuracyText}`.trim());
         setActiveStep(2);
         setTimeout(() => setLocationStatus(''), 4500);
       }
     } catch (err) {
+      const msg = err?.message || String(err || '');
       setLocationStatus(
-        err?.message?.includes('denied')
+        msg.toLowerCase().includes('denied')
           ? '⚠️ Location permission was denied in your browser. Select a town below or search above.'
           : '⚠️ Device GPS is unavailable on this device/browser. Please select a town below or search above.'
       );

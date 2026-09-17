@@ -118,6 +118,9 @@ export const useShopStore = create((set, get) => ({
     set({ isDetectingLocation: true, error: null });
     try {
       const pos = await getCurrentGpsPosition();
+      if (!pos || typeof pos !== 'object') {
+        throw new Error('GPS position unavailable');
+      }
       let detectedName = 'Your Live GPS Location';
       let formattedAddress = '';
 
@@ -130,10 +133,11 @@ export const useShopStore = create((set, get) => ({
         }
       } catch (_) {}
 
-      const center = makeGpsCenter(pos.latitude, pos.longitude, pos.accuracy, false, detectedName, formattedAddress);
+      const posAccuracy = pos.accuracy ?? null;
+      const center = makeGpsCenter(pos.latitude, pos.longitude, posAccuracy, false, detectedName, formattedAddress);
       set({
         searchCenter: center,
-        userGps: { latitude: pos.latitude, longitude: pos.longitude, accuracy: pos.accuracy },
+        userGps: { latitude: pos.latitude, longitude: pos.longitude, accuracy: posAccuracy },
         latitude: pos.latitude,
         longitude: pos.longitude,
         locationName: detectedName,
@@ -148,15 +152,15 @@ export const useShopStore = create((set, get) => ({
       return {
         latitude: pos.latitude,
         longitude: pos.longitude,
-        accuracy: pos.accuracy,
+        accuracy: posAccuracy,
         name: detectedName,
         formattedAddress,
         isIpFallback: false,
       };
     } catch (gpsErr) {
-      console.warn('Device GPS unavailable:', gpsErr.message);
+      console.warn('Device GPS unavailable:', gpsErr?.message);
       set({ isDetectingLocation: false });
-      const err = new Error(gpsErr.message || 'GPS location unavailable');
+      const err = new Error(gpsErr?.message || 'GPS location unavailable');
       throw err;
     }
   },
