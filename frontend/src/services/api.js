@@ -1,29 +1,37 @@
 import axios from 'axios';
 
 export const getBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
-    return envUrl.trim().replace(/\/+$/, '');
-  }
-
   if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+
+    // Production deployment on Vercel: always use origin so frontend calls Vercel's own /api backend
+    if (hostname.endsWith('vercel.app') || hostname.includes('vercel.app')) {
+      return window.location.origin;
+    }
+
+    // Custom override if user configured one
     const customUrl = localStorage.getItem('custom_api_url');
-    if (customUrl && typeof customUrl === 'string' && customUrl.trim() !== '') {
+    if (customUrl && typeof customUrl === 'string' && customUrl.trim() !== '' && !customUrl.includes('trycloudflare.com')) {
       return customUrl.trim().replace(/\/+$/, '');
     }
 
-    const hostname = window.location.hostname;
     // Local development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8001';
     }
+
     // Mobile access on local Wi-Fi (e.g. 192.168.x.x)
     const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
     if (isPrivateIp) {
       return `http://${hostname}:8001`;
     }
-    // Production deployment on Vercel: use origin
+
     return window.location.origin;
+  }
+
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '' && !envUrl.includes('trycloudflare.com')) {
+    return envUrl.trim().replace(/\/+$/, '');
   }
 
   return 'http://localhost:8001';
