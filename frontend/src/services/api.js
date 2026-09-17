@@ -1,33 +1,32 @@
 import axios from 'axios';
 
-// Clear any stale local storage overrides from previous sessions
-if (typeof window !== 'undefined') {
-  localStorage.removeItem('custom_api_url');
-  localStorage.removeItem('VITE_API_URL');
-}
-
 export const getBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
     return envUrl.trim().replace(/\/+$/, '');
   }
 
-  if (typeof window !== 'undefined' && window.location.hostname) {
+  if (typeof window !== 'undefined') {
+    const customUrl = localStorage.getItem('custom_api_url');
+    if (customUrl && typeof customUrl === 'string' && customUrl.trim() !== '') {
+      return customUrl.trim().replace(/\/+$/, '');
+    }
+
     const hostname = window.location.hostname;
-    // Local development
+    // When running locally on localhost/127.0.0.1, connect directly to live Vercel backend
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8001';
+      return 'https://shop-2-eight.vercel.app';
     }
     // Mobile access on local Wi-Fi (e.g. 192.168.x.x)
     const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
     if (isPrivateIp) {
-      return `http://${hostname}:8001`;
+      return 'https://shop-2-eight.vercel.app';
     }
     // Production deployment on Vercel: use origin
     return window.location.origin;
   }
 
-  return 'http://localhost:8001';
+  return 'https://shop-2-eight.vercel.app';
 };
 
 const api = axios.create({
