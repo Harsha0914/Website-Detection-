@@ -158,8 +158,9 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     const nameLower = (b.name || '').toLowerCase();
     if (nameLower.includes('(permanently closed)') || nameLower.includes('[permanently closed]') || nameLower.includes('(closed)') || nameLower.includes('closed permanently')) return false;
 
-    // 1. Strict radius enforcement (Requirement 1 & 13)
-    if (b.distance_km != null && b.distance_km > radiusKm) return false;
+    // 1. Strict radius enforcement (allow nearest fallback if overall set is small)
+    const maxAllowedDist = businesses.length <= 5 ? Math.max(radiusKm, 15.0) : radiusKm;
+    if (b.distance_km != null && b.distance_km > maxAllowedDist) return false;
 
     // 2. Category selection within radius (Requirement 2)
     if (category && category !== 'All Categories') {

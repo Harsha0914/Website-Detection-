@@ -190,6 +190,7 @@ def _get_db_real_places(
 
     # 2. Query SQLite shop.db
     db_candidates = [
+        "/tmp/shop.db",
         os.path.join(os.getcwd(), "shop.db"),
         os.path.join(os.getcwd(), "backend", "shop.db"),
         os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "shop.db"),
@@ -1059,7 +1060,31 @@ class GooglePlacesProvider(PlacesProvider):
 
             found_places = []
             try:
-                with httpx.Client(timeout=2.5) as client:
+                with httpx.Client(timeout=4.5) as client:
+                    # 1. Official Google Places API searchNearby with exact Circular radius
+                    if not keyword:
+                        nearby_payload = {
+                            "includedTypes": allowed_types if allowed_types else ["store", "restaurant", "supermarket", "grocery_store", "pharmacy", "clothing_store", "electronics_store", "bakery", "beauty_salon"],
+                            "maxResultCount": 20,
+                            "locationRestriction": {
+                                "circle": {
+                                    "center": {"latitude": o_lat, "longitude": o_lng},
+                                    "radius": min(50000.0, max(o_radius * 1000.0, 2000.0))
+                                }
+                            }
+                        }
+                        try:
+                            n_resp = client.post(f"{self.BASE_URL}:searchNearby", json=nearby_payload, headers=headers)
+                            if n_resp.status_code == 200:
+                                for p in n_resp.json().get("places", []):
+                                    found_places.append(p)
+                            elif n_resp.status_code in (429, 403):
+                                quota_hit = True
+                                GooglePlacesProvider._quota_exhausted_until = time.time() + 3600.0
+                        except Exception:
+                            pass
+
+                    # 2. Text Search Query for broad keyword / category matching
                     for tq in text_queries[:2]:
                         if quota_hit:
                             break
@@ -1068,14 +1093,17 @@ class GooglePlacesProvider(PlacesProvider):
                             "locationRestriction": bbox,
                             "maxResultCount": 20
                         }
-                        resp = client.post(f"{self.BASE_URL}:searchText", json=t_payload, headers=headers)
-                        if resp.status_code == 200:
-                            for p in resp.json().get("places", []):
-                                found_places.append(p)
-                        elif resp.status_code in (429, 403):
-                            quota_hit = True
-                            GooglePlacesProvider._quota_exhausted_until = time.time() + 3600.0
-                            break
+                        try:
+                            resp = client.post(f"{self.BASE_URL}:searchText", json=t_payload, headers=headers)
+                            if resp.status_code == 200:
+                                for p in resp.json().get("places", []):
+                                    found_places.append(p)
+                            elif resp.status_code in (429, 403):
+                                quota_hit = True
+                                GooglePlacesProvider._quota_exhausted_until = time.time() + 3600.0
+                                break
+                        except Exception:
+                            pass
             except Exception:
                 pass
             return found_places
@@ -1090,7 +1118,7 @@ class GooglePlacesProvider(PlacesProvider):
                             continue
                         raw_count += 1
                         place, entry = _parse_google_place(
-                            p, latitude, longitude, radius_km, self.api_key,
+                            p, latitude, longitude, max(radius_km, 15.0), self.api_key,
                             allowed_types=allowed_types,
                             canonical_category=canonical_category
                         )
@@ -1101,7 +1129,7 @@ class GooglePlacesProvider(PlacesProvider):
             print(f"Google Places multi-origin search error: {e}")
 
         # Augment with verified genuine database places
-        db_real = _get_db_real_places(latitude, longitude, radius_km, canonical_category or category, keyword)
+        db_real = _get_db_real_places(latitude, longitude, max(radius_km, 25.0), canonical_category or category, keyword)
         for dp in db_real:
             if dp.place_id not in all_places_map:
                 all_places_map[dp.place_id] = dp
@@ -1116,6 +1144,14 @@ class GooglePlacesProvider(PlacesProvider):
             if dist <= radius_km:
                 p.distance_km = round(dist, 3)
                 valid_results.append(p)
+
+        # If strict radius is very tight (e.g. <= 2km) and has 0 shops, gracefully include nearest regional shops
+        if len(valid_results) == 0 and len(all_places_map) > 0:
+            for p in all_places_map.values():
+                dist = haversine_km(latitude, longitude, p.latitude, p.longitude)
+                if dist <= max(radius_km * 2.5, 10.0):
+                    p.distance_km = round(dist, 3)
+                    valid_results.append(p)
 
         sorted_results = sorted(valid_results, key=lambda x: x.distance_km or 0)
 
