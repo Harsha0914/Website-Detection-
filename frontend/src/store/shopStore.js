@@ -121,7 +121,7 @@ export const useShopStore = create((set, get) => ({
       if (!pos || typeof pos !== 'object') {
         throw new Error('GPS position unavailable');
       }
-      let detectedName = 'Your Live GPS Location';
+      let detectedName = `${pos.latitude.toFixed(4)}°, ${pos.longitude.toFixed(4)}°`;
       let formattedAddress = '';
 
       // Reverse-geocode to find friendly neighborhood / city name
@@ -130,6 +130,9 @@ export const useShopStore = create((set, get) => ({
         if (rev?.name && rev.name !== 'Current Location') {
           detectedName = rev.name;
           formattedAddress = rev.formattedAddress || '';
+        } else if (rev?.formattedAddress) {
+          detectedName = rev.formattedAddress.split(',').slice(0, 2).join(', ');
+          formattedAddress = rev.formattedAddress;
         }
       } catch (_) {}
 

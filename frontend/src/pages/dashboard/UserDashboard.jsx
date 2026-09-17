@@ -171,14 +171,15 @@ export default function UserDashboard() {
   }, []);
 
   const handleDetectLocation = async (autoSearch = true) => {
-    setLocationStatus('Acquiring device GPS…');
+    setLocationStatus('Acquiring high-accuracy device GPS…');
     setIsTyping(false);
     try {
       const pos = await detectCurrentLocation(autoSearch);
-      setForceInputValue('');
       if (pos && typeof pos === 'object') {
+        const displayName = pos.name || `${pos.latitude.toFixed(4)}°, ${pos.longitude.toFixed(4)}°`;
+        setForceInputValue(displayName);
         const accuracyText = pos?.accuracy ? `(±${pos.accuracy} m)` : '';
-        setLocationStatus(`📍 GPS locked: ${pos?.name || 'Your Location'} ${accuracyText}`.trim());
+        setLocationStatus(`📍 GPS locked: ${displayName} ${accuracyText}`.trim());
         setActiveStep(2);
         setTimeout(() => setLocationStatus(''), 4500);
       }

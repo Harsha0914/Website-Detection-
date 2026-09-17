@@ -435,6 +435,86 @@ def get_place_details(place_id: str = Query(...)):
             return coords
     raise HTTPException(status_code=404, detail="Place details not found or not supported")
 
+@router.get("/places/reverse-geocode")
+def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
+    """
+    Reverse geocodes coordinates to human-readable address and locality using Google Geocoding API.
+    """
+    # 1. Google Geocoding API if key available
+    if settings.GOOGLE_PLACES_API_KEY:
+        try:
+            import requests
+            url = "https://maps.googleapis.com/maps/api/geocode/json"
+            params = {
+                "latlng": f"{lat},{lng}",
+                "key": settings.GOOGLE_PLACES_API_KEY,
+                "language": "en"
+            }
+            res = requests.get(url, params=params, timeout=5)
+            if res.ok:
+                data = res.json()
+                if data.get("status") == "OK" and data.get("results"):
+                    first = data["results"][0]
+                    formatted_address = first.get("formatted_address", "")
+                    
+                    components = first.get("address_components", [])
+                    sublocality = ""
+                    locality = ""
+                    admin_area = ""
+                    for c in components:
+                        types = c.get("types", [])
+                        if "sublocality_level_1" in types or "sublocality" in types or "neighborhood" in types:
+                            sublocality = c.get("long_name", "")
+                        elif "locality" in types:
+                            locality = c.get("long_name", "")
+                        elif "administrative_area_level_1" in types:
+                            admin_area = c.get("long_name", "")
+                    
+                    name_parts = [p for p in [sublocality, locality, admin_area] if p]
+                    short_name = ", ".join(name_parts[:2]) if name_parts else formatted_address.split(",")[0]
+                    
+                    return {
+                        "name": short_name or "Current Location",
+                        "formatted_address": formatted_address,
+                        "latitude": lat,
+                        "longitude": lng,
+                        "provider": "google"
+                    }
+        except Exception as e:
+            print(f"Google reverse geocode error: {e}")
+            
+    # 2. OpenStreetMap / Nominatim backend fallback
+    try:
+        import requests
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lng}&zoom=16&addressdetails=1"
+        headers = {"User-Agent": "ShopPresenceApp/1.0", "Accept-Language": "en"}
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.ok:
+            data = res.json()
+            addr = data.get("address", {})
+            neighborhood = addr.get("suburb") or addr.get("neighbourhood") or addr.get("residential") or addr.get("subdistrict")
+            city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("county") or addr.get("state_district")
+            state = addr.get("state")
+            parts = [p for p in [neighborhood, city, state] if p]
+            short_name = ", ".join(parts[:2]) if parts else (data.get("display_name", "").split(",")[0] or "Current Location")
+            return {
+                "name": short_name,
+                "formatted_address": data.get("display_name", ""),
+                "latitude": lat,
+                "longitude": lng,
+                "provider": "nominatim"
+            }
+    except Exception as e:
+        print(f"Nominatim reverse geocode error: {e}")
+
+    return {
+        "name": f"{lat:.4f}, {lng:.4f}",
+        "formatted_address": f"Coordinates: {lat:.5f}, {lng:.5f}",
+        "latitude": lat,
+        "longitude": lng,
+        "provider": "coordinates"
+    }
+
 @router.get("/filter/needs-improvement", response_model=list[BusinessOut])
 def get_needs_improvement(db: Session = Depends(get_db)):
     return db.query(Business).filter(Business.website_quality.in_([WebsiteQuality.NEEDS_IMPROVEMENT, WebsiteQuality.AVERAGE, WebsiteQuality.POOR])).all()

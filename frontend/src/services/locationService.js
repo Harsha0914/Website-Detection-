@@ -1,3 +1,5 @@
+import api from './api';
+
 /**
  * Location Service — Handles device GPS geolocation, accuracy, and reverse geocoding
  */
@@ -110,6 +112,41 @@ export async function getIpFallbackPosition() {
  * @returns {Promise<{name: string, formattedAddress: string}>}
  */
 export async function reverseGeocodeCoords(latitude, longitude) {
+  // Tier 1: Backend Google Geocoding API via serverless backend
+  try {
+    const res = await api.get('/businesses/places/reverse-geocode', {
+      params: { lat: latitude, lng: longitude },
+      timeout: 5000,
+    });
+    if (res.data?.name) {
+      return {
+        name: res.data.name,
+        formattedAddress: res.data.formatted_address || '',
+      };
+    }
+  } catch (_) {}
+
+  // Tier 2: Free BigDataCloud client-side reverse geocoding (fast, CORS-enabled, reliable)
+  try {
+    const res = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
+      { signal: AbortSignal.timeout(4000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const locality = data.locality || data.principalSubdivision || data.city;
+      const city = data.city || data.principalSubdivision;
+      const parts = Array.from(new Set([locality, city])).filter(Boolean);
+      const name = parts.join(', ') || data.countryName || 'Current Location';
+      const formattedAddress = [data.locality, data.city, data.principalSubdivision, data.countryName].filter(Boolean).join(', ');
+      return {
+        name,
+        formattedAddress,
+      };
+    }
+  } catch (_) {}
+
+  // Tier 3: OpenStreetMap / Nominatim fallback
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`,
@@ -132,7 +169,8 @@ export async function reverseGeocodeCoords(latitude, longitude) {
       };
     }
   } catch (_) {}
-  return { name: 'Current Location', formattedAddress: '' };
+
+  return { name: `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`, formattedAddress: `Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)}` };
 }
 
 /**
