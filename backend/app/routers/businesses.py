@@ -206,7 +206,8 @@ def get_nearby_businesses(
         p.category = infer_canonical_category([], None, p.name or "", current_cat=p.category)
 
         dist = haversine_km(latitude, longitude, p.latitude, p.longitude)
-        if dist > radius_km:
+        # Register all retrieved places in DB cache
+        if dist > max(radius_km * 3.0, 50.0):
             continue
 
         if category and not is_category_matching(p.category, category):
@@ -298,6 +299,7 @@ def get_nearby_businesses(
     seen_biz_ids: set[int] = set()
     seen_biz_keys: set[tuple[str, float, float]] = set()
 
+    candidate_items = []
     for p in places:
         p_status = (p.business_status or "OPERATIONAL").upper().strip()
         if p_status != "OPERATIONAL" or p_status in ("CLOSED_PERMANENTLY", "PERMANENTLY_CLOSED", "CLOSED", "CLOSED_TEMPORARILY", "TEMPORARILY_CLOSED"):
@@ -308,14 +310,10 @@ def get_nearby_businesses(
             continue
 
         dist = haversine_km(latitude, longitude, p.latitude, p.longitude)
-        if dist > radius_km:
-            continue
-
         biz = existing_biz_map.get(p.place_id)
         if not biz:
             continue
 
-        # Prevent duplicate instances of the same business from appearing twice
         if biz.id in seen_biz_ids:
             continue
 
@@ -335,7 +333,6 @@ def get_nearby_businesses(
             continue
 
         final_cat = infer_canonical_category([], None, p.name or biz.name, current_cat=p.category or biz.category)
-
         if category and not is_category_matching(final_cat, category):
             continue
 
@@ -359,11 +356,19 @@ def get_nearby_businesses(
             "website_score": biz.website_score,
             "website_quality": biz.website_quality,
             "last_website_check": biz.last_website_check,
-            "distance_km": round(dist, 3),  # Always recalculated from the exact search origin
+            "distance_km": round(dist, 3),
             "created_at": biz.created_at,
             "updated_at": biz.updated_at
         }
-        businesses_out.append(BusinessOut(**b_dict))
+        candidate_items.append((dist, BusinessOut(**b_dict)))
+
+    # 1. First select businesses strictly <= radius_km
+    in_radius = [b for (d, b) in candidate_items if d <= radius_km]
+    if in_radius:
+        businesses_out = in_radius
+    else:
+        # 2. If 0 businesses strictly in radius, gracefully include nearest regional businesses up to 35 km
+        businesses_out = [b for (d, b) in candidate_items if d <= max(radius_km * 2.5, 35.0)]
 
     # Sort strictly by calculated distance ascending (nearest → farthest)
     businesses_out.sort(key=lambda x: x.distance_km or 0)

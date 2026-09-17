@@ -159,7 +159,7 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     if (nameLower.includes('(permanently closed)') || nameLower.includes('[permanently closed]') || nameLower.includes('(closed)') || nameLower.includes('closed permanently')) return false;
 
     // 1. Strict radius enforcement (allow nearest fallback if overall set is small)
-    const maxAllowedDist = businesses.length <= 5 ? Math.max(radiusKm, 15.0) : radiusKm;
+    const maxAllowedDist = businesses.length <= 5 ? Math.max(radiusKm, 35.0) : Math.max(radiusKm, 25.0);
     if (b.distance_km != null && b.distance_km > maxAllowedDist) return false;
 
     // 2. Category selection within radius (Requirement 2)
@@ -591,6 +591,38 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                     </optgroup>
                   </select>
                 </div>
+              </div>
+
+              {/* Quick Select Buttons Strip */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: 'var(--sp-muted)', letterSpacing: '0.08em', marginRight: 2 }}>
+                  QUICK SELECT:
+                </span>
+                {QUICK_PLACES.slice(0, 11).map((p) => {
+                  const isSelected = locationName?.toLowerCase()?.includes(p.name.toLowerCase());
+                  return (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => {
+                        setLocation(p.lat, p.lng, p.name, null, true);
+                      }}
+                      style={{
+                        padding: '4px 11px',
+                        borderRadius: '99px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        border: isSelected ? '1.5px solid var(--sp-accent)' : '1px solid var(--sp-border)',
+                        background: isSelected ? 'var(--sp-accent)' : 'var(--sp-card)',
+                        color: isSelected ? '#fff' : 'var(--sp-text)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
