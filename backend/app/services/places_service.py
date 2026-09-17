@@ -142,6 +142,7 @@ def _get_db_real_places(
     # 1. First include verified regional places in-memory
     try:
         from app.services.verified_shops_data import VERIFIED_REGIONAL_PLACES
+        vp_candidates = []
         for vp in VERIFIED_REGIONAL_PLACES:
             v_lat = vp.get("latitude")
             v_lng = vp.get("longitude")
@@ -149,9 +150,6 @@ def _get_db_real_places(
             if v_lat is None or v_lng is None or not v_name:
                 continue
             dist = haversine_km(latitude, longitude, v_lat, v_lng)
-            if dist > radius_km:
-                continue
-
             v_cat = infer_canonical_category([], None, v_name, current_cat=vp.get("category"))
             if category and not is_category_matching(v_cat, category):
                 continue
@@ -167,24 +165,32 @@ def _get_db_real_places(
             seen_keys.add(norm_key)
             seen_pids.add(pid)
 
-            results.append(
-                PlaceData(
-                    place_id=pid,
-                    name=v_name,
-                    category=v_cat,
-                    address=v_addr,
-                    short_address=vp.get("short_address") or v_addr or v_name,
-                    google_maps_uri=f"https://maps.google.com/?q={v_lat},{v_lng}",
-                    latitude=v_lat,
-                    longitude=v_lng,
-                    phone=_parse_real_phone(vp.get("phone")),
-                    website_url=_clean_website(vp.get("website_url")),
-                    rating=vp.get("rating"),
-                    review_count=vp.get("review_count"),
-                    business_status="OPERATIONAL",
-                    distance_km=round(dist, 3),
-                )
+            p_data = PlaceData(
+                place_id=pid,
+                name=v_name,
+                category=v_cat,
+                address=v_addr,
+                short_address=vp.get("short_address") or v_addr or v_name,
+                google_maps_uri=f"https://maps.google.com/?q={v_lat},{v_lng}",
+                latitude=v_lat,
+                longitude=v_lng,
+                phone=_parse_real_phone(vp.get("phone")),
+                website_url=_clean_website(vp.get("website_url")),
+                rating=vp.get("rating"),
+                review_count=vp.get("review_count"),
+                business_status="OPERATIONAL",
+                distance_km=round(dist, 3),
             )
+            vp_candidates.append((dist, p_data))
+
+        # Include places within radius_km, or nearest available up to 50 items
+        in_radius = [p for (d, p) in vp_candidates if d <= radius_km]
+        if in_radius:
+            results.extend(in_radius)
+        else:
+            vp_candidates.sort(key=lambda x: x[0])
+            for d, p in vp_candidates[:50]:
+                results.append(p)
     except Exception as e:
         logger.warning(f"Error reading verified regional places: {e}")
 
@@ -1145,11 +1151,11 @@ class GooglePlacesProvider(PlacesProvider):
                 p.distance_km = round(dist, 3)
                 valid_results.append(p)
 
-        # If strict radius is very tight (e.g. <= 2km) and has 0 shops, gracefully include nearest regional shops
+        # If strict radius is very tight and has 0 shops, gracefully include nearest regional shops
         if len(valid_results) == 0 and len(all_places_map) > 0:
             for p in all_places_map.values():
                 dist = haversine_km(latitude, longitude, p.latitude, p.longitude)
-                if dist <= max(radius_km * 2.5, 10.0):
+                if dist <= max(radius_km * 2.5, 50.0):
                     p.distance_km = round(dist, 3)
                     valid_results.append(p)
 
