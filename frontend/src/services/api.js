@@ -13,20 +13,20 @@ export const getBaseUrl = () => {
     }
 
     const hostname = window.location.hostname;
-    // When running locally on localhost/127.0.0.1, connect directly to live Vercel backend
+    // Local development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'https://shop-2-eight.vercel.app';
+      return 'http://localhost:8001';
     }
     // Mobile access on local Wi-Fi (e.g. 192.168.x.x)
     const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
     if (isPrivateIp) {
-      return 'https://shop-2-eight.vercel.app';
+      return `http://${hostname}:8001`;
     }
     // Production deployment on Vercel: use origin
     return window.location.origin;
   }
 
-  return 'https://shop-2-eight.vercel.app';
+  return 'http://localhost:8001';
 };
 
 const api = axios.create({

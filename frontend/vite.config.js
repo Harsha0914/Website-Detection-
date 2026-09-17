@@ -9,9 +9,8 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'https://shop-2-eight.vercel.app',
+        target: 'http://localhost:8001',
         changeOrigin: true,
-        secure: false,
       },
     },
   },
