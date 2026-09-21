@@ -1,18 +1,26 @@
 import axios from 'axios';
 
 export const getBaseUrl = () => {
+  // 1. Custom override if user configured one
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-
-    // Production deployment on Vercel: always use origin so frontend calls Vercel's own /api backend
-    if (hostname.endsWith('vercel.app') || hostname.includes('vercel.app')) {
-      return window.location.origin;
-    }
-
-    // Custom override if user configured one
     const customUrl = localStorage.getItem('custom_api_url');
     if (customUrl && typeof customUrl === 'string' && customUrl.trim() !== '' && !customUrl.includes('trycloudflare.com')) {
       return customUrl.trim().replace(/\/+$/, '');
+    }
+  }
+
+  // 2. Check environment variable VITE_API_URL
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '' && !envUrl.includes('trycloudflare.com')) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+
+    // Production deployment on Vercel: connect directly to live Render backend
+    if (hostname.endsWith('vercel.app') || hostname.includes('vercel.app') || hostname.includes('pages.dev')) {
+      return 'https://website-backend-d8t5.onrender.com';
     }
 
     // Local development
@@ -29,12 +37,7 @@ export const getBaseUrl = () => {
     return window.location.origin;
   }
 
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '' && !envUrl.includes('trycloudflare.com')) {
-    return envUrl.trim().replace(/\/+$/, '');
-  }
-
-  return 'http://localhost:8001';
+  return 'https://website-backend-d8t5.onrender.com';
 };
 
 const api = axios.create({

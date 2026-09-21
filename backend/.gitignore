@@ -1,0 +1,12 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db-shm
+*.db-wal
+*.bak
+.pytest_cache/
+.DS_Store
+.env
