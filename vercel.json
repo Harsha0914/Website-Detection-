@@ -27,11 +27,19 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.py"
+      "destination": "https://website-backend-d8t5.onrender.com/api/$1"
     },
     {
       "source": "/auth/(.*)",
-      "destination": "/api/index.py"
+      "destination": "https://website-backend-d8t5.onrender.com/auth/$1"
+    },
+    {
+      "source": "/docs",
+      "destination": "https://website-backend-d8t5.onrender.com/docs"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "https://website-backend-d8t5.onrender.com/openapi.json"
     },
     {
       "source": "/(.*)",
