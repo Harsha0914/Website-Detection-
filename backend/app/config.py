@@ -5,18 +5,34 @@ from pathlib import Path
 
 import os
 
-_BASE_DIR = Path(__file__).resolve().parent.parent.parent
-_DB_PATH = "/tmp/shop.db" if os.environ.get("VERCEL") else (_BASE_DIR / "shop.db").as_posix()
+def _resolve_db_path() -> str:
+    if os.environ.get("VERCEL"):
+        return "/tmp/shop.db"
+    current_file = Path(__file__).resolve()
+    backend_dir = current_file.parent.parent
+    workspace_root = backend_dir.parent
+    candidates = [
+        backend_dir / "shop.db",
+        workspace_root / "shop.db",
+        Path("/app/shop.db"),
+        Path("/tmp/shop.db"),
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c.as_posix()
+    return (backend_dir / "shop.db").as_posix()
+
+_DB_PATH = _resolve_db_path()
 
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "ShopPresence"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
-    ENVIRONMENT: str = "development"
+    DEBUG: bool = False
+    ENVIRONMENT: str = "production"
 
     # Database
-    DATABASE_URL: str = os.environ.get("DATABASE_URL", f"sqlite:///{_DB_PATH}")
+    DATABASE_URL: str = os.environ.get("DATABASE_URL") or f"sqlite:///{_DB_PATH}"
 
     # Admin Registration Secret Code
     ADMIN_SECRET_CODE: str = "ADMIN2026"
