@@ -42,7 +42,7 @@ export const getBaseUrl = () => {
 
 const api = axios.create({
   baseURL: getBaseUrl(),
-  timeout: 30000,
+  timeout: 90000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -68,11 +68,19 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor for automatic refresh on 401
+// Response interceptor for cold-start retry & automatic refresh on 401
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // Retry once on network error (handling Render cold boot)
+    if (!error.response && !originalRequest._networkRetry) {
+      originalRequest._networkRetry = true;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      return api(originalRequest);
+    }
+
     if (
       error.response &&
       error.response.status === 401 &&
