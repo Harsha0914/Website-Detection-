@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Store, Mail, Lock, ArrowRight, ArrowLeft, AlertCircle, HelpCircle, Eye, EyeOff, CheckCircle, KeyRound } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import api from '../../services/api';
 import MobileBottomNav from '../../components/layout/MobileBottomNav';
 
 export default function LoginPage() {
@@ -22,6 +23,28 @@ export default function LoginPage() {
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
+
+  const [loginTimeSeconds, setLoginTimeSeconds] = useState(0);
+
+  useEffect(() => {
+    // Ping backend on login page load to wake up free tier container immediately
+    api.get('/health').catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let interval = null;
+    if (loading) {
+      setLoginTimeSeconds(0);
+      interval = setInterval(() => {
+        setLoginTimeSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setLoginTimeSeconds(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [loading]);
 
   useEffect(() => {
     const qEmail = searchParams.get('email');
@@ -204,11 +227,29 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 px-4 text-xs font-black text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 active:scale-98 disabled:opacity-50"
+              className="w-full py-3.5 px-4 text-xs font-black text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 active:scale-98 disabled:opacity-75"
             >
-              <span>{loading ? 'Signing in...' : 'Sign In'}</span>
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                  <span>
+                    {loginTimeSeconds > 3
+                      ? `Waking up server (${loginTimeSeconds}s)...`
+                      : 'Signing in...'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
+            {loading && loginTimeSeconds > 4 && (
+              <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 animate-pulse">
+                Render free tier wakes up in ~15-30s. Please hold on...
+              </p>
+            )}
           </form>
 
           {/* Registration Links */}

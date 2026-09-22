@@ -18,9 +18,9 @@ export const getBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
 
-    // Production deployment on Vercel: connect directly to live Render backend
+    // Production deployment on Vercel: use relative path for instant Vercel CDN proxying & zero CORS preflight overhead
     if (hostname.endsWith('vercel.app') || hostname.includes('vercel.app') || hostname.includes('pages.dev')) {
-      return 'https://website-backend-d8t5.onrender.com';
+      return '';
     }
 
     // Local development
@@ -34,7 +34,7 @@ export const getBaseUrl = () => {
       return `http://${hostname}:8001`;
     }
 
-    return window.location.origin;
+    return '';
   }
 
   return 'https://website-backend-d8t5.onrender.com';

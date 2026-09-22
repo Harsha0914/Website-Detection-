@@ -24,9 +24,16 @@ import AdminBusinesses from './pages/admin/AdminBusinesses';
 import AdminWebsiteRequests from './pages/admin/AdminWebsiteRequests';
 import AdminReports from './pages/admin/AdminReports';
 
+import { useEffect } from 'react';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import api from './services/api';
 
 export default function App() {
+  useEffect(() => {
+    // Proactively ping backend to wake up free tier container immediately
+    api.get('/health').catch(() => {});
+  }, []);
+
   return (
     <Routes>
       {/* Public Routes */}
