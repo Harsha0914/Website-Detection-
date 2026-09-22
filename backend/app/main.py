@@ -110,8 +110,7 @@ def _ensure_seed_users():
                 ("admin@shoppresence.com", "System Admin", UserRole.ADMIN),
             ]
             
-            # Default hash for Password123
-            default_pwd_hash = "$2b$12$02X18P3b7K99Vnr2okdbV.2NiPV1sIhB./B75U4neIoJyiUXt5AXm"
+            valid_pwd_hash = hash_password("Password123")
 
             for email, name, role in seed_accounts:
                 email_clean = email.strip().lower()
@@ -121,7 +120,7 @@ def _ensure_seed_users():
                         full_name=name,
                         email=email_clean,
                         phone="",
-                        password_hash=default_pwd_hash,
+                        password_hash=valid_pwd_hash,
                         role=role,
                         is_active=True,
                         created_at=datetime.utcnow(),
@@ -129,8 +128,11 @@ def _ensure_seed_users():
                     )
                     db.add(new_user)
                 else:
-                    if not existing.is_active:
-                        existing.is_active = True
+                    existing.is_active = True
+                    # If password hash doesn't verify Password123 or Harsha@123, ensure it accepts Password123
+                    from app.utils.security import verify_password
+                    if not verify_password("Password123", existing.password_hash) and not verify_password("Harsha@123", existing.password_hash):
+                        existing.password_hash = valid_pwd_hash
             db.commit()
         except Exception as seed_err:
             db.rollback()
