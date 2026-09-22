@@ -98,6 +98,43 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  sendPasswordOtp: async (email) => {
+    try {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const res = await api.post('/auth/send-otp', { email: cleanEmail });
+      return res.data;
+    } catch (err) {
+      let msg = 'Failed to send OTP. Please try again.';
+      if (err.response?.data?.detail) {
+        msg = typeof err.response.data.detail === 'string' ? err.response.data.detail : JSON.stringify(err.response.data.detail);
+      } else if (err.message) {
+        msg = err.message;
+      }
+      throw new Error(msg);
+    }
+  },
+
+  verifyOtpAndResetPassword: async ({ email, otp, new_password, confirm_password }) => {
+    try {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const res = await api.post('/auth/verify-otp-reset-password', {
+        email: cleanEmail,
+        otp: String(otp).trim(),
+        new_password,
+        confirm_password,
+      });
+      return res.data;
+    } catch (err) {
+      let msg = 'Failed to verify OTP and reset password.';
+      if (err.response?.data?.detail) {
+        msg = typeof err.response.data.detail === 'string' ? err.response.data.detail : JSON.stringify(err.response.data.detail);
+      } else if (err.message) {
+        msg = err.message;
+      }
+      throw new Error(msg);
+    }
+  },
+
   resetPassword: async ({ email, new_password, confirm_password }) => {
     set({ loading: true, error: null });
     try {
