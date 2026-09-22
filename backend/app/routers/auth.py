@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, UserRole
-from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
+from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, ResetPasswordRequest
 from app.schemas.user import UserOut
 from app.utils.security import hash_password, verify_password
 from app.auth.jwt import create_access_token, create_refresh_token, decode_token
@@ -12,6 +12,21 @@ from app.auth.dependencies import get_current_user
 from jose import JWTError
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+@router.post("/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    email_clean = req.email.lower().strip()
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address."
+        )
+    user.password_hash = hash_password(req.new_password)
+    user.is_active = True
+    db.commit()
+    return {"message": "Password reset successfully! You can now log in with your new password."}
+
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):

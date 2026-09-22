@@ -1,18 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Store, Mail, Lock, ArrowRight, ArrowLeft, AlertCircle, HelpCircle, Eye, EyeOff } from 'lucide-react';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Store, Mail, Lock, ArrowRight, ArrowLeft, AlertCircle, HelpCircle, Eye, EyeOff, CheckCircle, KeyRound } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import MobileBottomNav from '../../components/layout/MobileBottomNav';
 
 export default function LoginPage() {
-  const { login, loading, error, isAuthenticated, user } = useAuthStore();
+  const { login, resetPassword, loading, error, isAuthenticated, user } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+
+  // Forgot password form state
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetNewPass, setResetNewPass] = useState('');
+  const [resetConfirmPass, setResetConfirmPass] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+
+  useEffect(() => {
+    const qEmail = searchParams.get('email');
+    if (qEmail) {
+      setEmail(qEmail);
+      setResetEmail(qEmail);
+    }
+    if (searchParams.get('forgot') === '1') {
+      setShowForgotModal(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -43,6 +63,50 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetSubmit = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+
+    if (resetNewPass.length < 8) {
+      setResetError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (!/[A-Z]/.test(resetNewPass)) {
+      setResetError('Password must contain at least one uppercase letter.');
+      return;
+    }
+    if (!/[0-9]/.test(resetNewPass)) {
+      setResetError('Password must contain at least one number.');
+      return;
+    }
+    if (resetNewPass !== resetConfirmPass) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await resetPassword({
+        email: resetEmail,
+        new_password: resetNewPass,
+        confirm_password: resetConfirmPass,
+      });
+      setResetSuccess('Password reset successfully! You can now log in.');
+      setEmail(resetEmail);
+      setPassword(resetNewPass);
+      setTimeout(() => {
+        setShowForgotModal(false);
+        setResetSuccess('');
+      }, 2000);
+    } catch (err) {
+      setResetError(err.message || 'Failed to reset password.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50/60 via-slate-50 to-indigo-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
       
@@ -70,9 +134,21 @@ export default function LoginPage() {
         <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl py-8 px-6 sm:px-10 shadow-xl shadow-blue-500/5 dark:shadow-none rounded-3xl border border-slate-200/80 dark:border-slate-800 space-y-5">
           
           {error && (
-            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center gap-2.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{typeof error === 'string' ? error : JSON.stringify(error)}</span>
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 space-y-2.5">
+              <div className="flex items-center gap-2.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{typeof error === 'string' ? error : JSON.stringify(error)}</span>
+              </div>
+              {typeof error === 'string' && error.toLowerCase().includes('not found') && (
+                <div className="pt-2 border-t border-rose-200/60 dark:border-rose-900/60">
+                  <Link
+                    to={`/register?email=${encodeURIComponent(email)}`}
+                    className="block w-full py-2 px-3 text-center text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors"
+                  >
+                    Register This Email Now →
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
@@ -167,23 +243,106 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Forgot Password Modal */}
+      {/* Forgot / Reset Password Modal */}
       {showForgotModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
-            <div className="flex items-center gap-2.5 text-slate-900 dark:text-white font-bold text-base">
-              <HelpCircle className="w-5 h-5 text-blue-600" />
-              <span>Password Recovery</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-slate-900 dark:text-white font-bold text-base">
+                <KeyRound className="w-5 h-5 text-blue-600" />
+                <span>Reset Password</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotModal(false);
+                  setResetError('');
+                  setResetSuccess('');
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold px-2 py-1"
+              >
+                ✕
+              </button>
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              If you forgot your password, please contact the system administrator or register a new user account with your active email.
+
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Enter your registered email address and choose a new password.
             </p>
-            <button
-              onClick={() => setShowForgotModal(false)}
-              className="w-full py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 rounded-xl transition-all"
-            >
-              Got it
-            </button>
+
+            {resetSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 flex items-center gap-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{resetSuccess}</span>
+              </div>
+            )}
+
+            {resetError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center gap-2 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{resetError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleResetSubmit} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Registered Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="your-email@example.com"
+                  className="w-full px-3 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={resetNewPass}
+                  onChange={(e) => setResetNewPass(e.target.value)}
+                  placeholder="Min 8 chars, 1 uppercase & 1 number"
+                  className="w-full px-3 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={resetConfirmPass}
+                  onChange={(e) => setResetConfirmPass(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full px-3 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(false)}
+                  className="flex-1 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="flex-1 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition-all disabled:opacity-50"
+                >
+                  {resetLoading ? 'Resetting...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -191,3 +350,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

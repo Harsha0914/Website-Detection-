@@ -98,6 +98,35 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  resetPassword: async ({ email, new_password, confirm_password }) => {
+    set({ loading: true, error: null });
+    try {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const res = await api.post('/auth/reset-password', {
+        email: cleanEmail,
+        new_password,
+        confirm_password,
+      });
+      set({ loading: false, error: null });
+      return res.data;
+    } catch (err) {
+      let msg = 'Failed to reset password. Please verify the email address.';
+      if (err.response?.data?.detail) {
+        if (Array.isArray(err.response.data.detail)) {
+          msg = err.response.data.detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(', ');
+        } else if (typeof err.response.data.detail === 'string') {
+          msg = err.response.data.detail;
+        } else {
+          msg = JSON.stringify(err.response.data.detail);
+        }
+      } else if (err.message) {
+        msg = err.message;
+      }
+      set({ loading: false, error: msg });
+      throw new Error(msg);
+    }
+  },
+
   logout: () => {
     try {
       api.post('/auth/logout').catch(() => {});
