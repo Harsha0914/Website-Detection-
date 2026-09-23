@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   AlertCircle,
   CheckCircle,
-  Key,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -29,7 +28,6 @@ export default function RegisterPage() {
     phone: '',
     password: '',
     confirm_password: '',
-    admin_code: '',
   });
 
   const [validationError, setValidationError] = useState('');
@@ -71,11 +69,6 @@ export default function RegisterPage() {
       return;
     }
 
-    if (role === 'ADMIN' && !formData.admin_code.trim()) {
-      setValidationError('Admin Secret Code is required for administrator registration.');
-      return;
-    }
-
     try {
       await register({
         full_name: formData.full_name,
@@ -84,7 +77,6 @@ export default function RegisterPage() {
         password: formData.password,
         confirm_password: formData.confirm_password,
         role: role,
-        admin_code: formData.admin_code,
       });
 
       setSuccessMessage(
@@ -250,28 +242,6 @@ export default function RegisterPage() {
                 />
               </div>
             </div>
-
-            {/* Admin Secret Code (Only if Admin selected) */}
-            {role === 'ADMIN' && (
-              <div className="p-4 bg-amber-50/80 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-900/60 space-y-2">
-                <label className="block text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center justify-between">
-                  <span>Admin Secret Authorization Code</span>
-                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono font-normal">Default: ADMIN2026</span>
-                </label>
-                <div className="relative">
-                  <Key className="w-4 h-4 text-amber-600 dark:text-amber-400 absolute left-3.5 top-3.5" />
-                  <input
-                    type="password"
-                    name="admin_code"
-                    required
-                    value={formData.admin_code}
-                    onChange={handleChange}
-                    placeholder="Enter admin secret passcode"
-                    className="w-full pl-10 pr-3.5 py-3 text-xs bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono"
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Password */}
             <div>

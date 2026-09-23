@@ -135,14 +135,15 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  resetPassword: async ({ email, new_password, confirm_password }) => {
+  resetPassword: async ({ email, old_password, new_password, confirm_password }) => {
     set({ loading: true, error: null });
     try {
       const cleanEmail = (email || '').trim().toLowerCase();
       const res = await api.post('/auth/reset-password', {
         email: cleanEmail,
+        old_password: old_password || undefined,
         new_password,
-        confirm_password,
+        confirm_password: confirm_password || new_password,
       });
       set({ loading: false, error: null });
       return res.data;
