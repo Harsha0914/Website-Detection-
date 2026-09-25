@@ -839,9 +839,30 @@ def is_category_matching(item_category: str | None, requested_category: str | No
     return req == item or req in item or item in req
 
 
+def _levenshtein_distance(s1: str, s2: str) -> int:
+    """Calculates Levenshtein edit distance between two strings."""
+    if s1 == s2:
+        return 0
+    if not s1:
+        return len(s2)
+    if not s2:
+        return len(s1)
+    v0 = list(range(len(s2) + 1))
+    v1 = [0] * (len(s2) + 1)
+    for i in range(len(s1)):
+        v1[0] = i + 1
+        for j in range(len(s2)):
+            cost = 0 if s1[i] == s2[j] else 1
+            v1[j + 1] = min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost)
+        for j in range(len(s2) + 1):
+            v0[j] = v1[j]
+    return v1[len(s2)]
+
+
 CATEGORY_ITEM_KEYWORDS: dict[str, list[str]] = {
     "Restaurant": [
-        "restaurant", "restaurants", "resu", "rest", "resta", "restaur", "dining", "dine", "food",
+        "restaurant", "restaurants", "restuarnt", "resturant", "restaurent", "restarant", "restuarant",
+        "restaren", "restuarent", "rastaurant", "resu", "rest", "resta", "restaur", "dining", "dine", "food",
         "dhaba", "dhabas", "hotel", "hotels", "bhojanalaya", "mess", "canteen", "curry point",
         "biryani", "biriyani", "mandi", "mandhi", "shawarma", "kebab", "kabab", "grill", "tandoori",
         "pizza", "pizzeria", "burger", "burgers", "sandwich", "fast food", "tiffin", "tiffins",
@@ -854,10 +875,10 @@ CATEGORY_ITEM_KEYWORDS: dict[str, list[str]] = {
         "starbucks", "ccd", "costa", "dunkin"
     ],
     "Bakery": [
-        "bakery", "bakeries", "bake", "bakes", "bakers", "bak", "cake", "cakes", "pastry",
-        "pastries", "sweet", "sweets", "sweet shop", "sweet house", "mithai", "confectionery",
-        "chocolate", "chocolates", "cookie", "cookies", "biscuit", "biscuits", "puff", "puffs",
-        "ice cream", "ice cream parlour", "dessert", "desserts", "cakezone", "karachi bakery", "theobroma"
+        "bakery", "bakeries", "bake", "bakes", "bakers", "bak", "bekery", "bekary", "bekari", "bakri",
+        "cake", "cakes", "pastry", "pastries", "sweet", "sweets", "sweet shop", "sweet house", "mithai",
+        "swits", "confectionery", "chocolate", "chocolates", "cookie", "cookies", "biscuit", "biscuits",
+        "puff", "puffs", "ice cream", "ice cream parlour", "dessert", "desserts", "cakezone", "karachi bakery", "theobroma"
     ],
     "Meat & Poultry": [
         "meat", "poultry", "chicken", "fresh chicken", "chicken centre", "chicken center",
@@ -866,15 +887,16 @@ CATEGORY_ITEM_KEYWORDS: dict[str, list[str]] = {
         "crabs", "egg", "eggs", "egg center", "butcher", "broiler", "vencobb", "live fish"
     ],
     "Grocery Store": [
-        "grocery", "groceries", "groc", "kirana", "kiranam", "provisions", "provision",
-        "general store", "daily needs", "ration", "vegetables", "vegetable shop", "fruits",
-        "fruit stall", "milk", "dairy", "dairy parlour", "curd", "paneer", "rice", "rice depot",
-        "flour mill", "atta", "oil", "oil depot", "spices", "dry fruits", "nuts", "organic store",
-        "patanjali", "heritage", "big basket", "zepto", "blinkit", "dunzo"
+        "grocery", "groceries", "grocerry", "grocrey", "groccery", "grosery", "groc", "kirana", "kiranam",
+        "kirana store", "provisions", "provision", "provisions store", "general store", "daily needs",
+        "ration", "vegetables", "vegetable shop", "fruits", "fruit stall", "milk", "dairy", "dairy parlour",
+        "curd", "paneer", "rice", "rice depot", "flour mill", "atta", "oil", "oil depot", "spices",
+        "dry fruits", "nuts", "organic store", "patanjali", "heritage", "big basket", "zepto", "blinkit", "dunzo"
     ],
     "Supermarket": [
-        "supermarket", "supermarkets", "super", "superm", "hypermarket", "hypermarkets",
-        "super mart", "super market", "super bazar", "super bazaar", "mart", "marts",
+        "supermarket", "supermarkets", "super market", "super markets", "supermaket", "supermart",
+        "supermrkt", "supramarket", "supper market", "super", "superm", "hypermarket", "hypermarkets",
+        "super mart", "super bazar", "super bazaar", "mart", "marts",
         "dmart", "d-mart", "reliance smart", "smart point", "more supermarket", "ratnadeep",
         "spencer", "spar hypermarket"
     ],
@@ -886,17 +908,18 @@ CATEGORY_ITEM_KEYWORDS: dict[str, list[str]] = {
         "arcade", "plaza", "galleria"
     ],
     "Pharmacy": [
-        "pharmacy", "pharmacies", "phar", "pharm", "pharma", "medical", "medicals", "medical store",
-        "medicine", "medicines", "chemist", "druggist", "drugstore", "drug store", "drugs",
+        "pharmacy", "pharmacies", "phar", "pharm", "pharma", "parmacy", "farmacy", "pharmecy",
+        "medical", "medicals", "medical store", "madical", "medicine", "medicines", "medicin", "medicne",
+        "madicine", "chemist", "druggist", "drugstore", "drug store", "drugs",
         "tablets", "capsules", "syrup", "ointment", "first aid", "health store", "surgicals",
         "apollo pharmacy", "medplus", "netmeds", "1mg", "diagnostics", "clinic", "pathology"
     ],
     "Clothing Store": [
-        "clothing", "clothing store", "cloth", "clothes", "garments", "garment", "apparel",
-        "fashion", "textiles", "textile", "dresses", "dress", "sarees", "saree", "silks", "silk",
-        "mens wear", "kids wear", "ladies wear", "shirts", "shirt", "pants", "pant", "jeans",
-        "t-shirts", "trousers", "ethnic wear", "boutique", "trends", "max fashion", "zudio",
-        "manyavar", "decathlon", "lenskart"
+        "clothing", "clothing store", "cloth", "clothes", "cloths", "clothe", "clothings", "cloting",
+        "garments", "garment", "apparel", "fashion", "fasion", "textiles", "textile", "dresses",
+        "dress", "sarees", "saree", "silks", "silk", "mens wear", "kids wear", "ladies wear",
+        "shirts", "shirt", "pants", "pant", "jeans", "t-shirts", "trousers", "ethnic wear",
+        "boutique", "trends", "max fashion", "zudio", "manyavar", "decathlon", "lenskart"
     ],
     "Tailor": [
         "tailor", "tailors", "tailoring", "tail", "master tailor", "stitching", "alteration",
@@ -913,21 +936,21 @@ CATEGORY_ITEM_KEYWORDS: dict[str, list[str]] = {
         "earrings", "kalyan jewellers", "tanishq", "malabar gold", "joyalukkas", "lalitha jewellery"
     ],
     "Mobile Phones": [
-        "mobile", "mobiles", "mobile phone", "mobile phones", "cell phone", "cell phones",
+        "mobile", "mobiles", "mobail", "mobile phone", "mobile phones", "cell phone", "cell phones",
         "smartphone", "smartphones", "phone store", "mobile store", "mobile care", "accessories",
         "recharge", "screen guard", "back cover", "charger", "poorvika", "sangeetha", "lotus mobiles"
     ],
     "Electronics Store": [
-        "electronics", "electronic", "electronics store", "elec", "elect", "computers", "computer",
-        "laptop", "laptops", "tv", "television", "refrigerator", "fridge", "washing machine",
-        "ac", "air conditioner", "cooler", "appliances", "home appliances", "cctv", "printers",
-        "croma", "vijay sales", "reliance digital"
+        "electronics", "electronic", "electronics store", "elctronics", "electornics", "electronis",
+        "electonics", "elec", "elect", "computers", "computer", "laptop", "laptops", "tv", "television",
+        "refrigerator", "fridge", "washing machine", "ac", "air conditioner", "cooler", "appliances",
+        "home appliances", "cctv", "printers", "croma", "vijay sales", "reliance digital"
     ],
     "Beauty Salon": [
-        "beauty salon", "beauty parlour", "beauty parlor", "salon", "salons", "sal", "saloon",
-        "saloons", "spa", "spas", "hair salon", "hairdresser", "hair style", "barber", "barbers",
-        "barber shop", "haircut", "facial", "makeup", "bridal makeup", "pedicure", "manicure",
-        "naturals", "green trends", "jawed habib", "enrich", "toni & guy", "urban company"
+        "beauty salon", "beauty parlour", "beauty parlor", "beuty", "beuty salon", "beauti salon",
+        "salon", "salons", "sal", "salun", "saloon", "saloons", "spa", "spas", "hair salon",
+        "hairdresser", "hair style", "barber", "barbers", "barber shop", "haircut", "facial",
+        "makeup", "bridal makeup", "pedicure", "manicure", "naturals", "green trends", "jawed habib", "enrich", "toni & guy", "urban company"
     ],
     "Gym": [
         "gym", "gyms", "fitness", "fit", "fitness centre", "fitness center", "health club",
@@ -963,9 +986,9 @@ CATEGORY_ITEM_KEYWORDS: dict[str, list[str]] = {
 
 def resolve_keyword_to_categories(keyword: str | None) -> list[str]:
     """
-    Given a search keyword like 'resu', 'pizza', 'saree', 'tablet', 'haircut', 'bike',
+    Given a search keyword like 'restuarnt', 'resu', 'pizza', 'saree', 'tablet', 'haircut', 'bike', 'supermaket',
     find all matching canonical categories.
-    Supports prefix matching, item matching, synonym matching, and fuzzy matching.
+    Supports exact, prefix, substring, synonym, phonetic typo, and fuzzy Levenshtein distance matching.
     """
     if not keyword or not isinstance(keyword, str):
         return []
@@ -976,7 +999,18 @@ def resolve_keyword_to_categories(keyword: str | None) -> list[str]:
     matched = []
     for cat_name, kw_list in CATEGORY_ITEM_KEYWORDS.items():
         for term in kw_list:
-            if kw == term or kw.startswith(term) or term.startswith(kw) or (len(kw) >= 3 and kw in term):
+            if (
+                kw == term
+                or kw.startswith(term)
+                or term.startswith(kw)
+                or (len(kw) >= 3 and term in kw)
+                or (len(kw) >= 3 and kw in term)
+                or (len(kw) >= 4 and len(term) >= 4 and (
+                    kw[:4] == term[:4]
+                    or _levenshtein_distance(kw, term) <= 2
+                    or (1.0 - _levenshtein_distance(kw, term) / max(len(kw), len(term))) >= 0.65
+                ))
+            ):
                 if cat_name not in matched:
                     matched.append(cat_name)
                 break
@@ -992,7 +1026,7 @@ def is_place_matching_search(
 ) -> bool:
     """
     Checks if a place matches the requested category and/or keyword.
-    Intelligently handles keywords that are category prefixes, items, synonyms, or shop names.
+    Intelligently handles keywords that are category prefixes, items, synonyms, typos, or shop names.
     """
     # 1. Check direct category filter if supplied
     if category and not is_category_matching(place_category, category):
@@ -1024,6 +1058,11 @@ def is_place_matching_search(
     # Prefix match on category name
     if cat_l.startswith(kw) or kw.startswith(cat_l):
         return True
+
+    # Fuzzy match directly on category name
+    if len(kw) >= 4 and len(cat_l) >= 4:
+        if _levenshtein_distance(kw, cat_l) <= 2 or (1.0 - _levenshtein_distance(kw, cat_l) / max(len(kw), len(cat_l))) >= 0.65:
+            return True
 
     return False
 

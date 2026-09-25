@@ -220,6 +220,12 @@ export default function UserDashboard() {
 
   const handleSearchSubmit = (e) => {
     e?.preventDefault?.();
+    if (keyword?.trim() && (!category || category === 'All Categories')) {
+      const matched = resolveKeywordToCategories(keyword);
+      if (matched.length === 1) {
+        setCategory(matched[0]);
+      }
+    }
     navigate('/shops');
     searchNearby();
   };
@@ -1171,26 +1177,40 @@ export default function UserDashboard() {
               />
               {keyword?.trim() && (
                 <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  {resolveKeywordToCategories(keyword).map((catName) => (
-                    <span
-                      key={catName}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '3px 10px',
-                        borderRadius: 99,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))',
-                        border: '1px solid rgba(99,102,241,0.3)',
-                        color: 'var(--accent)',
-                      }}
-                    >
-                      <span>✨ Matches:</span>
-                      <strong>{catName}</strong>
-                    </span>
-                  ))}
+                  {resolveKeywordToCategories(keyword).map((catName) => {
+                    const isSelected = category === catName;
+                    return (
+                      <button
+                        type="button"
+                        key={catName}
+                        onClick={() => {
+                          const catObj = CATEGORIES.find(c => c.value === catName) || { value: catName, label: catName, icon: Sparkles, color: '#6366f1' };
+                          handleCategorySelect(catObj);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          padding: '4px 12px',
+                          borderRadius: 99,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          background: isSelected
+                            ? 'linear-gradient(135deg, var(--accent), var(--accent-2))'
+                            : 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))',
+                          border: isSelected ? '1px solid var(--accent)' : '1px solid rgba(99,102,241,0.3)',
+                          color: isSelected ? '#ffffff' : 'var(--accent)',
+                          boxShadow: isSelected ? '0 2px 8px rgba(99,102,241,0.35)' : 'none',
+                        }}
+                      >
+                        <span>{isSelected ? '✓' : '✨'} Matches:</span>
+                        <strong>{catName}</strong>
+                        {!isSelected && <span style={{ opacity: 0.7, fontSize: 10 }}> (Click to select)</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
