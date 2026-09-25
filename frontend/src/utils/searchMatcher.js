@@ -154,7 +154,33 @@ export function resolveKeywordToCategories(keyword) {
   if (!kw || ['all', 'all categories', 'all shops', 'none', 'null'].includes(kw)) return [];
 
   const matched = [];
+
+  // 1. Check primary category names first (highest priority)
   for (const [catName, kwList] of Object.entries(CATEGORY_ITEM_KEYWORDS)) {
+    const catLower = catName.toLowerCase();
+    if (catLower.startsWith(kw) || kw.startsWith(catLower)) {
+      if (!matched.includes(catName)) matched.push(catName);
+    }
+  }
+
+  // 2. If short prefix (<= 2 chars), only match top 2 primary terms per category
+  if (kw.length <= 2) {
+    for (const [catName, kwList] of Object.entries(CATEGORY_ITEM_KEYWORDS)) {
+      if (matched.includes(catName)) continue;
+      const primaryTerms = kwList.slice(0, 2);
+      for (const term of primaryTerms) {
+        if (term.startsWith(kw)) {
+          matched.push(catName);
+          break;
+        }
+      }
+    }
+    return matched.slice(0, 3);
+  }
+
+  // 3. For length >= 3, match sub-items, synonyms, and typos
+  for (const [catName, kwList] of Object.entries(CATEGORY_ITEM_KEYWORDS)) {
+    if (matched.includes(catName)) continue;
     for (const term of kwList) {
       if (
         kw === term ||
@@ -167,14 +193,13 @@ export function resolveKeywordToCategories(keyword) {
           (1 - levenshteinDistance(kw, term) / Math.max(kw.length, term.length)) >= 0.65
         ))
       ) {
-        if (!matched.includes(catName)) {
-          matched.push(catName);
-        }
+        matched.push(catName);
         break;
       }
     }
   }
-  return matched;
+
+  return matched.slice(0, 3);
 }
 
 /**

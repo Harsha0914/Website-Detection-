@@ -735,31 +735,6 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                 </button>
               )}
             </div>
-
-            {keyword?.trim() && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                {resolveKeywordToCategories(keyword).map((catName) => (
-                  <span
-                    key={catName}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '4px 10px',
-                      borderRadius: 99,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))',
-                      border: '1px solid rgba(99,102,241,0.3)',
-                      color: 'var(--sp-accent)',
-                    }}
-                  >
-                    <span>✨ Matches Category:</span>
-                    <strong>{catName}</strong>
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
           {availableCategories.length > 0 && (
