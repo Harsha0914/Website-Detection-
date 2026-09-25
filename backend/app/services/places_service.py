@@ -1231,6 +1231,25 @@ class GooglePlacesProvider(PlacesProvider):
 
         canonical_category, allowed_types = resolve_category(category)
 
+        # ── FAST PATH: Check verified regional data FIRST ─────────────────────
+        # For known Indian cities with pre-verified data, return instantly
+        # without hitting Google API (which adds 3-9s latency and may fail)
+        _fast_cat = canonical_category or (category.strip() if category else None)
+        _fast_db = _get_db_real_places(latitude, longitude, radius_km, _fast_cat, keyword)
+        if len(_fast_db) >= 10:
+            now = time.time()
+            fast_debug = SearchDebugInfo(
+                search_origin_lat=latitude,
+                search_origin_lng=longitude,
+                selected_radius_km=radius_km,
+                provider_used="VerifiedRegionalData",
+                google_api_raw_count=len(_fast_db),
+                results_after_filter=len(_fast_db),
+            )
+            sorted_fast = sorted(_fast_db, key=lambda x: x.distance_km or 0)
+            _SEARCH_CACHE[cache_key] = (now, sorted_fast, fast_debug)
+            return sorted_fast, fast_debug
+
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": self.api_key.strip(),
