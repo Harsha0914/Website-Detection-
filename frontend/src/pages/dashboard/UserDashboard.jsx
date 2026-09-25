@@ -156,9 +156,28 @@ export default function UserDashboard() {
   const [isTyping, setIsTyping] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [showCategoryGrid, setShowCategoryGrid] = useState(false);
+  const [showKeywordDropdown, setShowKeywordDropdown] = useState(false);
   const [selectedCat, setSelectedCat] = useState(CATEGORIES[0]);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
+
+  const matchingKeywordCategories = React.useMemo(() => {
+    if (!keyword || !keyword.trim()) {
+      return CATEGORIES.filter(c => c.value !== '');
+    }
+    const kw = keyword.trim().toLowerCase();
+    const resolvedNames = resolveKeywordToCategories(kw);
+    const directMatches = CATEGORIES.filter(c => {
+      if (!c.value) return false;
+      const labelLower = c.label.toLowerCase();
+      return (
+        labelLower.includes(kw) ||
+        kw.includes(labelLower) ||
+        resolvedNames.includes(c.value)
+      );
+    });
+    return directMatches.length > 0 ? directMatches : CATEGORIES.filter(c => c.value !== '');
+  }, [keyword]);
 
   const checkGoogleStatus = async () => {
     try {
@@ -216,16 +235,18 @@ export default function UserDashboard() {
     setSelectedCat(cat);
     setCategory(cat.value);
     setShowCategoryGrid(false);
+    setShowKeywordDropdown(false);
   };
 
   const handleSearchSubmit = (e) => {
     e?.preventDefault?.();
     if (keyword?.trim() && (!category || category === 'All Categories')) {
       const matched = resolveKeywordToCategories(keyword);
-      if (matched.length === 1) {
+      if (matched.length > 0) {
         setCategory(matched[0]);
       }
     }
+    setShowKeywordDropdown(false);
     navigate('/shops');
     searchNearby();
   };
@@ -1153,28 +1174,169 @@ export default function UserDashboard() {
               )}
             </div>
 
-            {/* Card 3: Keyword */}
-            <div className="ud-card">
+            {/* Card 3: Keyword Search with Downside Category Suggestions */}
+            <div className="ud-card" style={{ position: 'relative' }}>
               <div className="ud-card-header">
                 <div className="ud-card-label">
                   <div className="ud-card-num ud-card-num-active">3</div>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Search style={{ width: 15, height: 15, color: '#6366f1' }} />
-                    Search Keyword / Items
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'none' }}>(optional)</span>
+                    Search Keyword / Category
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'none' }}>(e.g. restaurant, supermarket)</span>
                   </span>
                 </div>
               </div>
-              <input
-                type="text"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSearchSubmit(e);
-                }}
-                placeholder="e.g. restaurant, supermarket, biryani, bakery, pharmacy…"
-                className="ud-input"
-              />
+
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    setShowKeywordDropdown(true);
+                  }}
+                  onFocus={() => setShowKeywordDropdown(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setShowKeywordDropdown(false);
+                      handleSearchSubmit(e);
+                    }
+                  }}
+                  placeholder="Type category (e.g. restaurant, supermarket, bakery, pharmacy…)"
+                  className="ud-input"
+                  style={{ paddingRight: 64 }}
+                />
+                <div style={{ position: 'absolute', right: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {keyword?.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKeyword('');
+                        setShowKeywordDropdown(false);
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--text-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 4,
+                      }}
+                      title="Clear search"
+                    >
+                      <X style={{ width: 14, height: 14 }} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowKeywordDropdown(!showKeywordDropdown)}
+                    style={{
+                      background: 'rgba(99,102,241,0.08)',
+                      border: '1px solid rgba(99,102,241,0.2)',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      color: 'var(--accent)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '5px 8px',
+                      transition: 'all 0.2s',
+                    }}
+                    title="Select Category from Dropdown"
+                  >
+                    <ChevronDown
+                      style={{
+                        width: 15,
+                        height: 15,
+                        transform: showKeywordDropdown ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 0.2s',
+                      }}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Downside Category Dropdown List */}
+              {showKeywordDropdown && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    background: 'var(--bg-card)',
+                    border: '1.5px solid var(--border-active)',
+                    borderRadius: 14,
+                    padding: '8px',
+                    boxShadow: '0 12px 32px rgba(99,102,241,0.18)',
+                    maxHeight: 250,
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    zIndex: 50,
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '4px 8px' }}>
+                    Select Category to Search ({radiusKm} km):
+                  </div>
+                  {matchingKeywordCategories.map((cat) => (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => {
+                        setKeyword(cat.label);
+                        handleCategorySelect(cat);
+                        setShowKeywordDropdown(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        borderRadius: 10,
+                        border: selectedCat.value === cat.value ? '1px solid var(--accent)' : '1px solid transparent',
+                        background: selectedCat.value === cat.value ? 'rgba(99,102,241,0.12)' : 'transparent',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 8,
+                            background: cat.color + '22',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {React.createElement(cat.icon, {
+                            style: { width: 15, height: 15, color: cat.color },
+                          })}
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {cat.label}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: 'var(--accent)',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          background: 'rgba(99,102,241,0.08)',
+                        }}
+                      >
+                        Search {cat.label} →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Error */}
@@ -1200,7 +1362,7 @@ export default function UserDashboard() {
               ) : (
                 <>
                   <Search style={{ width: 18, height: 18 }} />
-                  <span>Search Shops Within {radiusKm} km</span>
+                  <span>Search {selectedCat?.value && selectedCat.value !== 'All Categories' ? `${selectedCat.label} ` : (keyword ? `"${keyword}" ` : '')}Within {radiusKm} km</span>
                   <ArrowRight style={{ width: 16, height: 16 }} />
                 </>
               )}
