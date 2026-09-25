@@ -1804,7 +1804,7 @@ class OSMPlacesProvider(PlacesProvider):
 
         def _fetch_mirror(ep: str) -> list[dict] | None:
             try:
-                with httpx.Client(timeout=2.0) as client:
+                with httpx.Client(timeout=1.0) as client:
                     resp = client.post(ep, data={"data": query}, headers=self.headers)
                     if resp.status_code == 200:
                         els = resp.json().get("elements", [])
@@ -1817,7 +1817,7 @@ class OSMPlacesProvider(PlacesProvider):
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(endpoints)) as executor:
                 futures = [executor.submit(_fetch_mirror, ep) for ep in endpoints]
-                for future in concurrent.futures.as_completed(futures, timeout=2.5):
+                for future in concurrent.futures.as_completed(futures, timeout=1.2):
                     res = future.result()
                     if res:
                         return res
