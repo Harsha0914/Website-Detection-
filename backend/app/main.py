@@ -87,63 +87,7 @@ def _ensure_sqlite_columns():
     except Exception as e:
         print(f"Database column migration note: {e}")
 
-def _ensure_seed_users():
-    try:
-        from app.database import SessionLocal
-        from app.models.user import User, UserRole
-        from app.utils.security import hash_password
-        from datetime import datetime
-
-        db = SessionLocal()
-        try:
-            # Common seed accounts that should always exist across restarts
-            seed_accounts = [
-                ("chevvuharshavardhanreddy6@gmail.com", "Harshavardhanreddy Chevvu", UserRole.USER),
-                ("chevvuharshavardhanreddy@gmail.com", "Harshavardhanreddy Chevvu", UserRole.USER),
-                ("chevvuharshavardhanreddy1@gmail.com", "Chevvuharshavardhanreddy1", UserRole.USER),
-                ("chevvuharshavardhanreddy2@gmail.com", "Harshavardhanreddy Chevvu", UserRole.USER),
-                ("chevvuharshavardhanreddy3@gmail.com", "Harshavardhanreddy Chevvu", UserRole.USER),
-                ("chevvuharshavardhanreddy4@gmail.com", "Harshavardhanreddy Chevvu", UserRole.USER),
-                ("chevvuharshavardhanreddy5@gmail.com", "Harshavardhanreddy Chevvu", UserRole.USER),
-                ("chevvuharshareddy@gmail.com", "Harsha Reddy", UserRole.USER),
-                ("asinshaik45@gmail.com", "Harshavardhanreddy Chevvu", UserRole.USER),
-                ("admin@shoppresence.com", "System Admin", UserRole.ADMIN),
-            ]
-            
-            valid_pwd_hash = hash_password("Password123")
-
-            for email, name, role in seed_accounts:
-                email_clean = email.strip().lower()
-                existing = db.query(User).filter(User.email == email_clean).first()
-                if not existing:
-                    new_user = User(
-                        full_name=name,
-                        email=email_clean,
-                        phone="",
-                        password_hash=valid_pwd_hash,
-                        role=role,
-                        is_active=True,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow(),
-                    )
-                    db.add(new_user)
-                else:
-                    existing.is_active = True
-                    # If password hash doesn't verify Password123 or Harsha@123, ensure it accepts Password123
-                    from app.utils.security import verify_password
-                    if not verify_password("Password123", existing.password_hash) and not verify_password("Harsha@123", existing.password_hash):
-                        existing.password_hash = valid_pwd_hash
-            db.commit()
-        except Exception as seed_err:
-            db.rollback()
-            print(f"Seed users notice: {seed_err}")
-        finally:
-            db.close()
-    except Exception as e:
-        print(f"Database seed initialization error: {e}")
-
 _ensure_sqlite_columns()
-_ensure_seed_users()
 
 limiter = Limiter(key_func=get_remote_address)
 

@@ -4,21 +4,14 @@ import re
 
 
 class RegisterRequest(BaseModel):
-    full_name: str
-    email: EmailStr
+    username: str | None = None
+    full_name: str | None = None
+    email: str | None = None
     phone: str | None = None
     password: str
     confirm_password: str
     role: str = "USER"
     admin_code: str | None = None
-
-    @field_validator("full_name")
-    @classmethod
-    def name_not_empty(cls, v: str) -> str:
-        v = v.strip()
-        if not v or len(v) < 2:
-            raise ValueError("Full name must be at least 2 characters")
-        return v
 
     @field_validator("password")
     @classmethod
@@ -42,7 +35,8 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    username: str | None = None
+    email: str | None = None
     password: str
 
 
@@ -53,6 +47,7 @@ class TokenResponse(BaseModel):
     user_id: int
     role: str
     full_name: str
+    username: str | None = None
 
 
 class RefreshRequest(BaseModel):

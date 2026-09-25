@@ -77,3 +77,29 @@ def test_login_invalid_password(client, normal_user):
         "password": "WrongPassword999",
     })
     assert response.status_code == 401
+    assert response.json()["detail"] == "Incorrect password. Please try again."
+
+def test_login_unregistered_user(client):
+    response = client.post("/api/auth/login", json={
+        "username": "nonexistentuser9999",
+        "password": "Password123",
+    })
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Account not found. Please register first."
+
+def test_register_and_login_with_username(client):
+    reg_resp = client.post("/api/auth/register", json={
+        "username": "customuser",
+        "full_name": "Custom User",
+        "email": "customuser@example.com",
+        "password": "SecurePassword1",
+        "confirm_password": "SecurePassword1",
+    })
+    assert reg_resp.status_code == 201
+
+    login_resp = client.post("/api/auth/login", json={
+        "username": "customuser",
+        "password": "SecurePassword1",
+    })
+    assert login_resp.status_code == 200
+    assert "access_token" in login_resp.json()

@@ -23,6 +23,7 @@ export default function RegisterPage() {
   const [role, setRole] = useState(initialRole);
 
   const [formData, setFormData] = useState({
+    username: '',
     full_name: '',
     email: '',
     phone: '',
@@ -36,6 +37,10 @@ export default function RegisterPage() {
   useEffect(() => {
     if (searchParams.get('role') === 'admin') {
       setRole('ADMIN');
+    }
+    const qUsername = searchParams.get('username');
+    if (qUsername) {
+      setFormData((prev) => ({ ...prev, username: qUsername }));
     }
     const qEmail = searchParams.get('email');
     if (qEmail) {
@@ -52,42 +57,59 @@ export default function RegisterPage() {
     e.preventDefault();
     setValidationError('');
 
+    const cleanUsername = formData.username.trim();
+    if (!cleanUsername) {
+      setValidationError('Please enter a username.');
+      return;
+    }
+    if (cleanUsername.length < 3) {
+      setValidationError('Username must be at least 3 characters long.');
+      return;
+    }
+    if (!formData.password) {
+      setValidationError('Please enter a password.');
+      return;
+    }
     if (formData.password.length < 8) {
-      setValidationError('Password must be at least 8 characters long');
+      setValidationError('Password must be at least 8 characters long.');
       return;
     }
     if (!/[A-Z]/.test(formData.password)) {
-      setValidationError('Password must contain at least one uppercase letter');
+      setValidationError('Password must contain at least one uppercase letter.');
       return;
     }
     if (!/[0-9]/.test(formData.password)) {
-      setValidationError('Password must contain at least one number');
+      setValidationError('Password must contain at least one number.');
       return;
     }
     if (formData.password !== formData.confirm_password) {
-      setValidationError('Passwords do not match');
+      setValidationError('Passwords do not match.');
       return;
     }
 
     try {
       await register({
-        full_name: formData.full_name,
-        email: formData.email,
+        username: cleanUsername,
+        full_name: formData.full_name?.trim() || cleanUsername,
+        email: formData.email?.trim() || `${cleanUsername}@shoppresence.local`,
         phone: formData.phone,
         password: formData.password,
         confirm_password: formData.confirm_password,
         role: role,
+        admin_code: role === 'ADMIN' ? 'ADMIN2026' : undefined,
       });
 
       setSuccessMessage(
         role === 'ADMIN'
-          ? 'Admin account created successfully! Redirecting to login...'
-          : 'Registration successful! Redirecting to login...'
+          ? 'Admin account created successfully! Redirecting to Sign In...'
+          : 'Registration successful! Redirecting to Sign In...'
       );
 
+      // Do NOT automatically log the user into the Dashboard immediately after registration.
+      // Redirect to Sign In/Login page.
       setTimeout(() => {
-        navigate('/login');
-      }, 1800);
+        navigate(`/login?username=${encodeURIComponent(cleanUsername)}`);
+      }, 1500);
     } catch (err) {
       // Handled by store error state
     }
@@ -193,6 +215,25 @@ export default function RegisterPage() {
 
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Username */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Username <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  type="text"
+                  name="username"
+                  required
+                  value={formData.username}
+                  onChange={handleChange}
+                  placeholder="e.g. johndoe"
+                  className="w-full pl-10 pr-3.5 py-3 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                />
+              </div>
+            </div>
+
             {/* Full Name */}
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Full Name</label>
@@ -201,7 +242,6 @@ export default function RegisterPage() {
                 <input
                   type="text"
                   name="full_name"
-                  required
                   value={formData.full_name}
                   onChange={handleChange}
                   placeholder="Jane Doe"
@@ -212,13 +252,12 @@ export default function RegisterPage() {
 
             {/* Email Address */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Email Address</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Email Address (Optional)</label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
                   type="email"
                   name="email"
-                  required
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="jane@example.com"

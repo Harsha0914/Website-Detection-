@@ -118,20 +118,59 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    # Duplicate email check
-    existing = db.query(User).filter(User.email == req.email.lower()).first()
-    if existing:
+    clean_username = (req.username or "").strip().lower()
+    clean_email = (req.email or "").strip().lower()
+
+    if not clean_username and not clean_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists."
+            detail="Username is required for registration."
         )
 
-    # Determine role
+    if not clean_username:
+        clean_username = clean_email.split("@")[0]
+
+    if not clean_email:
+        if "@" in clean_username:
+            clean_email = clean_username
+        else:
+            clean_email = f"{clean_username}@shoppresence.com"
+
+    # Check admin secret code if registering as ADMIN
+    if req.role.upper() == "ADMIN":
+        if req.admin_code is not None and req.admin_code != "ADMIN2026":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Admin Secret Code."
+            )
+
+    # Check for duplicate username
+    if clean_username:
+        existing_username = db.query(User).filter(User.username == clean_username).first()
+        if existing_username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A user with this username already exists."
+            )
+
+    # Check for duplicate email
+    if clean_email:
+        existing_email = db.query(User).filter(User.email == clean_email).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An account with this email already exists."
+            )
+
     user_role = UserRole.ADMIN if req.role.upper() == "ADMIN" else UserRole.USER
+    full_name = (req.full_name or clean_username).strip()
+    if not full_name:
+        full_name = clean_username.title()
 
     new_user = User(
-        full_name=req.full_name,
-        email=req.email.lower(),
+        username=clean_username,
+        full_name=full_name,
+        email=clean_email,
         phone=req.phone,
         password_hash=hash_password(req.password),
         role=user_role,
@@ -142,38 +181,42 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user
 
+
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    email_clean = req.email.lower().strip()
-    user = db.query(User).filter(User.email == email_clean).first()
-    
-    if not user:
-        # If user is not yet in the database (e.g. after cloud container restart or database reset),
-        # automatically provision and activate the account so the user is never locked out.
-        name_part = email_clean.split("@")[0].replace(".", " ").replace("_", " ").title()
-        user_role = UserRole.ADMIN if ("admin" in email_clean or "shoppresence.com" in email_clean) else UserRole.USER
-        user = User(
-            full_name=name_part if len(name_part) >= 2 else "User",
-            email=email_clean,
-            phone="",
-            password_hash=hash_password(req.password),
-            role=user_role,
-            is_active=True
+    identifier = (req.username or req.email or "").strip().lower()
+    if not identifier:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email is required."
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        if not verify_password(req.password, user.password_hash):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect password. Please check your password and try again."
-            )
+    if not req.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password is required."
+        )
 
-        # Auto-upgrade plain or legacy hash to fresh bcrypt hash if needed
-        if not user.password_hash.startswith("$2"):
-            user.password_hash = hash_password(req.password)
-            db.commit()
+    # Find account by username OR email
+    user = db.query(User).filter(
+        (User.email == identifier) | (User.username == identifier)
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found. Please register first."
+        )
+
+    if not verify_password(req.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password. Please try again."
+        )
+
+    # Auto-upgrade plain or legacy hash to fresh bcrypt hash if needed
+    if not user.password_hash.startswith("$2"):
+        user.password_hash = hash_password(req.password)
+        db.commit()
 
     if not user.is_active:
         user.is_active = True
@@ -188,7 +231,8 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         token_type="bearer",
         user_id=user.id,
         role=user.role.value,
-        full_name=user.full_name
+        full_name=user.full_name,
+        username=user.username or user.email
     )
 
 @router.post("/refresh", response_model=TokenResponse)

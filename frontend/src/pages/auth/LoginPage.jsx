@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Store, Mail, Lock, ArrowRight, ArrowLeft, AlertCircle, HelpCircle, Eye, EyeOff, CheckCircle, KeyRound } from 'lucide-react';
+import { Store, User, Mail, Lock, ArrowRight, ArrowLeft, AlertCircle, HelpCircle, Eye, EyeOff, CheckCircle, KeyRound } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../services/api';
 import MobileBottomNav from '../../components/layout/MobileBottomNav';
@@ -11,8 +11,9 @@ export default function LoginPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [validationError, setValidationError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
@@ -49,10 +50,10 @@ export default function LoginPage() {
   }, [loading]);
 
   useEffect(() => {
-    const qEmail = searchParams.get('email');
-    if (qEmail) {
-      setEmail(qEmail);
-      setResetEmail(qEmail);
+    const qUser = searchParams.get('username') || searchParams.get('email');
+    if (qUser) {
+      setUsername(qUser);
+      setResetEmail(qUser);
     }
     if (searchParams.get('forgot') === '1') {
       openForgotModal();
@@ -60,7 +61,7 @@ export default function LoginPage() {
   }, [searchParams]);
 
   const openForgotModal = () => {
-    setResetEmail(email || '');
+    setResetEmail(username || '');
     setResetOldPass('');
     setResetNewPass('');
     setResetError('');
@@ -91,7 +92,7 @@ export default function LoginPage() {
         confirm_password: resetNewPass,
       });
       setResetSuccess(res.message || 'Password updated successfully! You can now log in.');
-      setEmail(resetEmail);
+      setUsername(resetEmail);
       setPassword(resetNewPass);
       setTimeout(() => {
         setShowForgotModal(false);
@@ -117,10 +118,24 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) return;
+    setValidationError('');
+
+    const cleanUser = username.trim();
+    if (!cleanUser && !password) {
+      setValidationError('Please enter your username and password.');
+      return;
+    }
+    if (!cleanUser) {
+      setValidationError('Please enter your username.');
+      return;
+    }
+    if (!password) {
+      setValidationError('Please enter your password.');
+      return;
+    }
 
     try {
-      const userInfo = await login(email, password);
+      const userInfo = await login(cleanUser, password);
       if (userInfo.role === 'ADMIN') {
         navigate('/admin/dashboard', { replace: true });
       } else {
@@ -159,19 +174,19 @@ export default function LoginPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl py-8 px-6 sm:px-10 shadow-xl shadow-blue-500/5 dark:shadow-none rounded-3xl border border-slate-200/80 dark:border-slate-800 space-y-5">
           
-          {error && (
+          {(validationError || error) && (
             <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 space-y-2.5">
               <div className="flex items-center gap-2.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{typeof error === 'string' ? error : JSON.stringify(error)}</span>
+                <span>{validationError || (typeof error === 'string' ? error : JSON.stringify(error))}</span>
               </div>
-              {typeof error === 'string' && error.toLowerCase().includes('not found') && (
+              {!validationError && typeof error === 'string' && error.toLowerCase().includes('not found') && (
                 <div className="pt-2 border-t border-rose-200/60 dark:border-rose-900/60">
                   <Link
-                    to={`/register?email=${encodeURIComponent(email)}`}
-                    className="block w-full py-2 px-3 text-center text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors"
+                    to={`/register?username=${encodeURIComponent(username)}`}
+                    className="block w-full py-2.5 px-3 text-center text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors"
                   >
-                    Register This Email Now →
+                    Register / Create Account Now →
                   </Link>
                 </div>
               )}
@@ -179,17 +194,20 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email Address */}
+            {/* Username or Email Address */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Email Address</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Username or Email</label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jane@example.com"
+                  value={username}
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    setValidationError('');
+                  }}
+                  placeholder="Enter your username or email"
                   className="w-full pl-10 pr-3.5 py-3 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                 />
               </div>
@@ -213,7 +231,10 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setValidationError('');
+                  }}
                   placeholder="••••••••"
                   className="w-full pl-10 pr-10 py-3 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                 />

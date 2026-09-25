@@ -8,15 +8,19 @@ export const useAuthStore = create((set, get) => ({
   loading: false,
   error: null,
 
-  login: async (email, password) => {
+  login: async (usernameOrEmail, password) => {
     set({ loading: true, error: null });
     try {
-      const cleanEmail = (email || '').trim().toLowerCase();
-      const res = await api.post('/auth/login', { email: cleanEmail, password });
+      const cleanIdentifier = (usernameOrEmail || '').trim().toLowerCase();
+      const res = await api.post('/auth/login', {
+        username: cleanIdentifier,
+        email: cleanIdentifier,
+        password,
+      });
       const data = res.data;
 
-      const { access_token, refresh_token, role, full_name, user_id } = data;
-      const userInfo = { id: user_id, email: cleanEmail, full_name, role };
+      const { access_token, refresh_token, role, full_name, user_id, username } = data;
+      const userInfo = { id: user_id, username: username || cleanIdentifier, email: cleanIdentifier, full_name, role };
 
       try {
         localStorage.setItem('access_token', access_token);
@@ -39,16 +43,17 @@ export const useAuthStore = create((set, get) => ({
       return userInfo;
     } catch (err) {
       let msg = 'Failed to login. Please check your credentials.';
-      if (err.response?.data?.detail) {
-        if (Array.isArray(err.response.data.detail)) {
-          msg = err.response.data.detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(', ');
-        } else if (typeof err.response.data.detail === 'string') {
-          msg = err.response.data.detail;
-        } else {
-          msg = JSON.stringify(err.response.data.detail);
-        }
+      const detail = err.response?.data?.detail;
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail)) {
+        msg = detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(', ');
+      } else if (detail) {
+        msg = JSON.stringify(detail);
+      } else if (err.response?.status === 404) {
+        msg = 'Account not found. Please register first.';
       } else if (err.response?.status === 401) {
-        msg = 'Invalid email or password. Please verify your credentials or register a new account.';
+        msg = 'Incorrect password. Please try again.';
       } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         msg = 'Connection timed out. Please check your internet connection and try again.';
       } else if (err.message === 'Network Error' || (err.isAxiosError && !err.response)) {
@@ -56,17 +61,27 @@ export const useAuthStore = create((set, get) => ({
       } else if (err.message) {
         msg = err.message;
       }
+
+      // Safeguard exact required messages
+      if (msg.toLowerCase().includes('account not found') || err.response?.status === 404) {
+        msg = 'Account not found. Please register first.';
+      } else if (msg.toLowerCase().includes('incorrect password') || (err.response?.status === 401 && !msg.toLowerCase().includes('deactivated'))) {
+        msg = 'Incorrect password. Please try again.';
+      }
+
       set({ loading: false, error: msg });
       throw new Error(msg);
     }
   },
 
-  register: async ({ full_name, email, phone, password, confirm_password, role = 'USER', admin_code = '' }) => {
+  register: async ({ username, full_name, email, phone, password, confirm_password, role = 'USER', admin_code = '' }) => {
     set({ loading: true, error: null });
     try {
+      const cleanUsername = (username || '').trim().toLowerCase();
       const cleanEmail = (email || '').trim().toLowerCase();
       const res = await api.post('/auth/register', {
-        full_name,
+        username: cleanUsername,
+        full_name: (full_name || cleanUsername || '').trim(),
         email: cleanEmail,
         phone,
         password,
@@ -78,14 +93,13 @@ export const useAuthStore = create((set, get) => ({
       return res.data;
     } catch (err) {
       let msg = 'Registration failed. Please check your details and try again.';
-      if (err.response?.data?.detail) {
-        if (Array.isArray(err.response.data.detail)) {
-          msg = err.response.data.detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(', ');
-        } else if (typeof err.response.data.detail === 'string') {
-          msg = err.response.data.detail;
-        } else {
-          msg = JSON.stringify(err.response.data.detail);
-        }
+      const detail = err.response?.data?.detail;
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail)) {
+        msg = detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(', ');
+      } else if (detail) {
+        msg = JSON.stringify(detail);
       } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         msg = 'Connection timed out. Please check your internet connection and try again.';
       } else if (err.message === 'Network Error' || (err.isAxiosError && !err.response)) {
@@ -167,8 +181,8 @@ export const useAuthStore = create((set, get) => ({
 
   logout: () => {
     try {
-      api.post('/auth/logout').catch(() => {});
-    } catch (_) {}
+      api.post('/auth/logout').catch(() => { });
+    } catch (_) { }
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_info');

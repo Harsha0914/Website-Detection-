@@ -5,8 +5,9 @@ from app.models.user import UserRole
 
 
 class UserBase(BaseModel):
+    username: str | None = None
     full_name: str
-    email: EmailStr
+    email: str
     phone: str | None = None
 
 
