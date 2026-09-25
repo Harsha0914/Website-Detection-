@@ -35,6 +35,7 @@ import GoogleMapsConnectModal from '../../components/common/GoogleMapsConnectMod
 import BulkWhatsAppBroadcastModal from '../../components/shops/BulkWhatsAppBroadcastModal';
 import { launchWhatsAppApp } from '../../services/whatsappService';
 import { useShopStore } from '../../store/shopStore';
+import { isBusinessMatching, resolveKeywordToCategories } from '../../utils/searchMatcher';
 
 const CATEGORIES = [
   'All Categories',
@@ -162,48 +163,9 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     const maxAllowedDist = businesses.length <= 5 ? Math.max(radiusKm, 35.0) : Math.max(radiusKm, 25.0);
     if (b.distance_km != null && b.distance_km > maxAllowedDist) return false;
 
-    // 2. Category selection within radius (Requirement 2)
-    if (category && category !== 'All Categories') {
-      const targetCat = category.toLowerCase().trim();
-      const shopCat = (b.category || '').toLowerCase().trim();
-
-      if (targetCat === 'restaurant' || targetCat.includes('restaurant')) {
-        if (!['restaurant', 'family restaurant', 'fast food restaurant'].includes(shopCat)) {
-          return false;
-        }
-      } else if (targetCat === 'beauty salon' || targetCat.includes('salon') || targetCat.includes('spa') || targetCat.includes('barber')) {
-        if (!['beauty salon', 'hair salon', 'barber shop', 'spa'].includes(shopCat)) {
-          return false;
-        }
-      } else if (targetCat === 'bakery' || targetCat.includes('bakery')) {
-        if (!['bakery', 'pastry shop'].includes(shopCat)) {
-          return false;
-        }
-      } else if (targetCat === 'supermarket' || targetCat.includes('supermarket')) {
-        if (!['supermarket', 'hypermarket'].includes(shopCat)) {
-          return false;
-        }
-      } else if (targetCat === 'grocery store' || targetCat.includes('grocery') || targetCat.includes('general store')) {
-        if (!['grocery store', 'general store', 'convenience store'].includes(shopCat)) {
-          return false;
-        }
-      } else if (targetCat === 'pharmacy' || targetCat.includes('pharmacy') || targetCat.includes('medical')) {
-        if (!['pharmacy', 'drugstore'].includes(shopCat)) {
-          return false;
-        }
-      } else if (targetCat === 'cafe' || targetCat.includes('cafe')) {
-        if (!['cafe', 'coffee shop'].includes(shopCat)) {
-          return false;
-        }
-      } else if (targetCat === 'meat & poultry' || targetCat.includes('meat') || targetCat.includes('poultry') || targetCat.includes('chicken') || targetCat.includes('mutton') || targetCat.includes('fish')) {
-        if (!['meat & poultry', 'meat shop'].includes(shopCat)) {
-          return false;
-        }
-      } else {
-        if (shopCat !== targetCat && !shopCat.includes(targetCat) && !targetCat.includes(shopCat)) {
-          return false;
-        }
-      }
+    // 2. Category & Keyword Match (with semantic items, aliases, prefixes)
+    if (!isBusinessMatching(b, keyword, category)) {
+      return false;
     }
 
     // 3. Tab filter
@@ -704,9 +666,103 @@ export default function ShopsPage({ defaultTab = 'all' }) {
           </div>
         </div>
 
-        {/* ── Categories Available Within Radius (Requirement 2) ── */}
-        {availableCategories.length > 0 && (
-          <div style={{ maxWidth: '1280px', margin: '12px auto 0', padding: '0 28px', width: '100%', boxSizing: 'border-box' }}>
+        {/* ── Search & Categories Bar ── */}
+        <div style={{ maxWidth: '1280px', margin: '12px auto 0', padding: '0 28px', width: '100%', boxSizing: 'border-box' }}>
+          {/* Quick Search & Keyword Filter Input */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            marginBottom: '10px',
+            flexWrap: 'wrap',
+          }}>
+            <div style={{
+              position: 'relative',
+              flex: '1',
+              minWidth: '240px',
+              maxWidth: '420px',
+            }}>
+              <Search
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: '14px',
+                  height: '14px',
+                  color: 'var(--sp-muted)',
+                }}
+              />
+              <input
+                type="text"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="Quick search items or category (e.g. resu, biryani, cake, meds)..."
+                style={{
+                  width: '100%',
+                  padding: '8px 32px 8px 34px',
+                  borderRadius: '12px',
+                  border: '1.5px solid var(--sp-border)',
+                  background: 'var(--sp-card)',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--sp-text)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {keyword && (
+                <button
+                  type="button"
+                  onClick={() => setKeyword('')}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--sp-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                  }}
+                  title="Clear search"
+                >
+                  <X style={{ width: 14, height: 14 }} />
+                </button>
+              )}
+            </div>
+
+            {keyword?.trim() && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {resolveKeywordToCategories(keyword).map((catName) => (
+                  <span
+                    key={catName}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '4px 10px',
+                      borderRadius: 99,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))',
+                      border: '1px solid rgba(99,102,241,0.3)',
+                      color: 'var(--sp-accent)',
+                    }}
+                  >
+                    <span>✨ Matches Category:</span>
+                    <strong>{catName}</strong>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {availableCategories.length > 0 && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -775,8 +831,8 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                 );
               })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* ── API Diagnostic Notice ── */}
         {apiError && (

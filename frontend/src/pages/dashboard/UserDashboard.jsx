@@ -43,6 +43,7 @@ import GoogleMapsConnectModal from '../../components/common/GoogleMapsConnectMod
 import WhatsAppAnalyticsDashboard from '../../components/dashboard/WhatsAppAnalyticsDashboard';
 import { useShopStore } from '../../store/shopStore';
 import api from '../../services/api';
+import { resolveKeywordToCategories } from '../../utils/searchMatcher';
 
 const CATEGORIES = [
   { value: '', label: 'All Categories', icon: Store, color: '#6366f1' },
@@ -1153,7 +1154,7 @@ export default function UserDashboard() {
                   <div className="ud-card-num ud-card-num-active">3</div>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Search style={{ width: 15, height: 15, color: '#6366f1' }} />
-                    Search Keyword
+                    Search Keyword / Items
                     <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'none' }}>(optional)</span>
                   </span>
                 </div>
@@ -1162,9 +1163,36 @@ export default function UserDashboard() {
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                placeholder="e.g. Organic, Tailor, Bakery, Medical…"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSearchSubmit(e);
+                }}
+                placeholder="e.g. resu, biryani, cake, medicine, pizza, cloth, gym…"
                 className="ud-input"
               />
+              {keyword?.trim() && (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {resolveKeywordToCategories(keyword).map((catName) => (
+                    <span
+                      key={catName}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '3px 10px',
+                        borderRadius: 99,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))',
+                        border: '1px solid rgba(99,102,241,0.3)',
+                        color: 'var(--accent)',
+                      }}
+                    >
+                      <span>✨ Matches:</span>
+                      <strong>{catName}</strong>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Error */}

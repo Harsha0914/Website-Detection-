@@ -151,11 +151,8 @@ def _get_db_real_places(
                 continue
             dist = haversine_km(latitude, longitude, v_lat, v_lng)
             v_cat = infer_canonical_category([], None, v_name, current_cat=vp.get("category"))
-            if category and not is_category_matching(v_cat, category):
-                continue
-
             v_addr = vp.get("address", "")
-            if keyword and keyword.lower() not in v_name.lower() and (not v_addr or keyword.lower() not in v_addr.lower()):
+            if not is_place_matching_search(v_name, v_cat, v_addr, keyword, category):
                 continue
 
             norm_key = (v_name.strip().lower(), round(v_lat, 4), round(v_lng, 4))
@@ -231,10 +228,7 @@ def _get_db_real_places(
                 continue
 
             canonical_cat = infer_canonical_category([], None, name, current_cat=cat)
-            if category and not is_category_matching(canonical_cat, category):
-                continue
-
-            if keyword and keyword.lower() not in name.lower() and (not addr or keyword.lower() not in addr.lower()):
+            if not is_place_matching_search(name, canonical_cat, addr, keyword, category):
                 continue
 
             norm_key = (name.strip().lower(), round(lat, 4), round(lng, 4))
@@ -842,12 +836,197 @@ def is_category_matching(item_category: str | None, requested_category: str | No
         return item in ("jewelry", "jewelry store")
     if req in ("book store", "books", "stationery"):
         return item in ("book store", "stationery store")
-    if req in ("furniture", "furnishing"):
-        return item in ("furniture", "furniture store")
-    if req in ("pet store", "pet", "pets"):
-        return item in ("pet store",)
-
     return req == item or req in item or item in req
+
+
+CATEGORY_ITEM_KEYWORDS: dict[str, list[str]] = {
+    "Restaurant": [
+        "restaurant", "restaurants", "resu", "rest", "resta", "restaur", "dining", "dine", "food",
+        "dhaba", "dhabas", "hotel", "hotels", "bhojanalaya", "mess", "canteen", "curry point",
+        "biryani", "biriyani", "mandi", "mandhi", "shawarma", "kebab", "kabab", "grill", "tandoori",
+        "pizza", "pizzeria", "burger", "burgers", "sandwich", "fast food", "tiffin", "tiffins",
+        "meals", "veg", "non veg", "chinese", "south indian", "north indian", "eatery", "kitchen",
+        "bistro", "bawarchi", "paradise", "kfc", "dominos", "subway", "burger king", "haldiram"
+    ],
+    "Cafe": [
+        "cafe", "cafes", "coffee", "coffee shop", "tea", "tea stall", "tea point", "chai",
+        "chai point", "beverages", "juice", "juice center", "shake", "shakes", "smoothie",
+        "starbucks", "ccd", "costa", "dunkin"
+    ],
+    "Bakery": [
+        "bakery", "bakeries", "bake", "bakes", "bakers", "bak", "cake", "cakes", "pastry",
+        "pastries", "sweet", "sweets", "sweet shop", "sweet house", "mithai", "confectionery",
+        "chocolate", "chocolates", "cookie", "cookies", "biscuit", "biscuits", "puff", "puffs",
+        "ice cream", "ice cream parlour", "dessert", "desserts", "cakezone", "karachi bakery", "theobroma"
+    ],
+    "Meat & Poultry": [
+        "meat", "poultry", "chicken", "fresh chicken", "chicken centre", "chicken center",
+        "chicken shop", "chicken mart", "chicken stall", "mutton", "mutton shop", "mutton centre",
+        "mutton center", "mutton mart", "fish", "fish market", "fish shop", "seafood", "prawns",
+        "crabs", "egg", "eggs", "egg center", "butcher", "broiler", "vencobb", "live fish"
+    ],
+    "Grocery Store": [
+        "grocery", "groceries", "groc", "kirana", "kiranam", "provisions", "provision",
+        "general store", "daily needs", "ration", "vegetables", "vegetable shop", "fruits",
+        "fruit stall", "milk", "dairy", "dairy parlour", "curd", "paneer", "rice", "rice depot",
+        "flour mill", "atta", "oil", "oil depot", "spices", "dry fruits", "nuts", "organic store",
+        "patanjali", "heritage", "big basket", "zepto", "blinkit", "dunzo"
+    ],
+    "Supermarket": [
+        "supermarket", "supermarkets", "super", "superm", "hypermarket", "hypermarkets",
+        "super mart", "super market", "super bazar", "super bazaar", "mart", "marts",
+        "dmart", "d-mart", "reliance smart", "smart point", "more supermarket", "ratnadeep",
+        "spencer", "spar hypermarket"
+    ],
+    "Department Store": [
+        "department store", "department stores", "departmental store", "dept store", "variety store"
+    ],
+    "Shopping Mall": [
+        "shopping mall", "shopping malls", "mall", "malls", "shopping complex", "commercial complex",
+        "arcade", "plaza", "galleria"
+    ],
+    "Pharmacy": [
+        "pharmacy", "pharmacies", "phar", "pharm", "pharma", "medical", "medicals", "medical store",
+        "medicine", "medicines", "chemist", "druggist", "drugstore", "drug store", "drugs",
+        "tablets", "capsules", "syrup", "ointment", "first aid", "health store", "surgicals",
+        "apollo pharmacy", "medplus", "netmeds", "1mg", "diagnostics", "clinic", "pathology"
+    ],
+    "Clothing Store": [
+        "clothing", "clothing store", "cloth", "clothes", "garments", "garment", "apparel",
+        "fashion", "textiles", "textile", "dresses", "dress", "sarees", "saree", "silks", "silk",
+        "mens wear", "kids wear", "ladies wear", "shirts", "shirt", "pants", "pant", "jeans",
+        "t-shirts", "trousers", "ethnic wear", "boutique", "trends", "max fashion", "zudio",
+        "manyavar", "decathlon", "lenskart"
+    ],
+    "Tailor": [
+        "tailor", "tailors", "tailoring", "tail", "master tailor", "stitching", "alteration",
+        "blouse stitching", "suit tailoring", "raymond tailor"
+    ],
+    "Footwear": [
+        "footwear", "foot", "shoes", "shoe", "shoe store", "chappal", "chappals", "sandals",
+        "sandal", "slippers", "slipper", "boots", "sneakers", "leather works", "bata", "woodland",
+        "khadim", "paragon", "relaxo", "red tape", "metro shoes", "mochi"
+    ],
+    "Jewelry": [
+        "jewelry", "jewellery", "jewel", "jewels", "jewellers", "jeweller", "gold", "silver",
+        "diamond", "diamonds", "platinum", "gold ornaments", "necklace", "bangles", "rings",
+        "earrings", "kalyan jewellers", "tanishq", "malabar gold", "joyalukkas", "lalitha jewellery"
+    ],
+    "Mobile Phones": [
+        "mobile", "mobiles", "mobile phone", "mobile phones", "cell phone", "cell phones",
+        "smartphone", "smartphones", "phone store", "mobile store", "mobile care", "accessories",
+        "recharge", "screen guard", "back cover", "charger", "poorvika", "sangeetha", "lotus mobiles"
+    ],
+    "Electronics Store": [
+        "electronics", "electronic", "electronics store", "elec", "elect", "computers", "computer",
+        "laptop", "laptops", "tv", "television", "refrigerator", "fridge", "washing machine",
+        "ac", "air conditioner", "cooler", "appliances", "home appliances", "cctv", "printers",
+        "croma", "vijay sales", "reliance digital"
+    ],
+    "Beauty Salon": [
+        "beauty salon", "beauty parlour", "beauty parlor", "salon", "salons", "sal", "saloon",
+        "saloons", "spa", "spas", "hair salon", "hairdresser", "hair style", "barber", "barbers",
+        "barber shop", "haircut", "facial", "makeup", "bridal makeup", "pedicure", "manicure",
+        "naturals", "green trends", "jawed habib", "enrich", "toni & guy", "urban company"
+    ],
+    "Gym": [
+        "gym", "gyms", "fitness", "fit", "fitness centre", "fitness center", "health club",
+        "workout", "bodybuilding", "crossfit", "cult fit", "golds gym", "anytime fitness", "slam fitness"
+    ],
+    "Auto Repair": [
+        "auto repair", "auto", "car repair", "car service", "bike repair", "bike service",
+        "mechanic", "garage", "puncture", "tyres", "tyre", "tire", "tires", "wheel alignment",
+        "oil change", "water wash", "car wash", "auto parts", "spare parts", "bosch car service",
+        "castrol", "mrf", "apollo tyres", "ceat", "royal enfield service", "maruti service", "hero service"
+    ],
+    "Hardware Store": [
+        "hardware", "hardware store", "hard", "electricals", "electrical", "lighting", "paints",
+        "paint", "asian paints", "cement", "steel", "pipes", "pipe", "plumbing", "sanitary",
+        "plywood", "glass", "tiles", "tools", "building materials"
+    ],
+    "Furniture": [
+        "furniture", "furn", "furniture store", "furnishing", "sofa", "bed", "cot", "dining table",
+        "chair", "chairs", "table", "cupboard", "almirah", "mattress", "curtains", "interior decor",
+        "godrej interio", "nilkamal", "home centre", "pepperfry", "ikea"
+    ],
+    "Book Store": [
+        "book store", "book", "books", "stationery", "stationery store", "book depot", "book stall",
+        "notebooks", "pens", "school books", "college books", "xerox", "photocopy", "printing",
+        "gift shop", "gifts", "novelties", "crossword", "sapna book house", "archies"
+    ],
+    "Pet Store": [
+        "pet store", "pet", "pets", "dog food", "cat food", "aquarium", "birds", "pet clinic",
+        "pet grooming", "pet supplies"
+    ]
+}
+
+
+def resolve_keyword_to_categories(keyword: str | None) -> list[str]:
+    """
+    Given a search keyword like 'resu', 'pizza', 'saree', 'tablet', 'haircut', 'bike',
+    find all matching canonical categories.
+    Supports prefix matching, item matching, synonym matching, and fuzzy matching.
+    """
+    if not keyword or not isinstance(keyword, str):
+        return []
+    kw = keyword.strip().lower()
+    if not kw or kw in ("all", "all categories", "all shops", "none", "null"):
+        return []
+
+    matched = []
+    for cat_name, kw_list in CATEGORY_ITEM_KEYWORDS.items():
+        for term in kw_list:
+            if kw == term or kw.startswith(term) or term.startswith(kw) or (len(kw) >= 3 and kw in term):
+                if cat_name not in matched:
+                    matched.append(cat_name)
+                break
+    return matched
+
+
+def is_place_matching_search(
+    place_name: str,
+    place_category: str | None,
+    place_address: str | None,
+    keyword: str | None = None,
+    category: str | None = None
+) -> bool:
+    """
+    Checks if a place matches the requested category and/or keyword.
+    Intelligently handles keywords that are category prefixes, items, synonyms, or shop names.
+    """
+    # 1. Check direct category filter if supplied
+    if category and not is_category_matching(place_category, category):
+        return False
+
+    # 2. Check keyword if supplied
+    if not keyword or not isinstance(keyword, str) or not keyword.strip():
+        return True
+
+    kw = keyword.strip().lower()
+    if kw in ("all", "all categories", "all shops", "none", "null"):
+        return True
+
+    name_l = (place_name or "").lower()
+    cat_l = (place_category or "").lower()
+    addr_l = (place_address or "").lower()
+
+    # Direct substring in name or address
+    if kw in name_l or (addr_l and kw in addr_l):
+        return True
+
+    # Check if keyword matches the place's category or any category alias
+    matched_cats = resolve_keyword_to_categories(kw)
+    if matched_cats:
+        for mc in matched_cats:
+            if is_category_matching(place_category, mc):
+                return True
+
+    # Prefix match on category name
+    if cat_l.startswith(kw) or kw.startswith(cat_l):
+        return True
+
+    return False
+
 
 
 def _extract_google_photo_url(photos: Any, api_key: str) -> str | None:
@@ -1528,12 +1707,18 @@ class OSMPlacesProvider(PlacesProvider):
     def get_location_coordinates(self, place_id: str) -> dict | None:
         return MockPlacesProvider().get_location_coordinates(place_id)
 
-    def _overpass_query(self, latitude: float, longitude: float, radius_m: int, category: str | None) -> list[dict]:
+    def _overpass_query(self, latitude: float, longitude: float, radius_m: int, category: str | None, keyword: str | None = None) -> list[dict]:
         """
         Query real place & business data via Overpass (node + way) with Nominatim fallback.
         Guarantees accurate real-time commercial results scaling dynamically with radius.
         """
         cat_lower = (category or "").lower()
+        if not cat_lower and keyword:
+            kw_cats = resolve_keyword_to_categories(keyword)
+            if kw_cats:
+                cat_lower = kw_cats[0].lower()
+            else:
+                cat_lower = keyword.lower()
         if "restaurant" in cat_lower or "food" in cat_lower or "cafe" in cat_lower:
             tag_filters = 'node["amenity"~"restaurant|cafe|fast_food|food_court|ice_cream"](around:{r},{lat},{lng}); way["amenity"~"restaurant|cafe|fast_food|food_court"](around:{r},{lat},{lng});'
         elif "pharmacy" in cat_lower or "medical" in cat_lower or "hospital" in cat_lower or "clinic" in cat_lower:
@@ -1601,10 +1786,10 @@ class OSMPlacesProvider(PlacesProvider):
             pass
 
         # Nominatim parallel search fallback
-        nom_results = self._nominatim_query(latitude, longitude, radius_m, category)
+        nom_results = self._nominatim_query(latitude, longitude, radius_m, category, keyword)
         return nom_results or []
 
-    def _nominatim_query(self, latitude: float, longitude: float, radius_m: int, category: str | None) -> list[dict]:
+    def _nominatim_query(self, latitude: float, longitude: float, radius_m: int, category: str | None, keyword: str | None = None) -> list[dict]:
         """
         Fallback: query Nominatim concurrently across commercial categories.
         Converts Nominatim results into a format compatible with OSM element dicts.
@@ -1612,6 +1797,13 @@ class OSMPlacesProvider(PlacesProvider):
         import concurrent.futures
 
         cat_lower = (category or "").lower()
+        if not cat_lower and keyword:
+            kw_cats = resolve_keyword_to_categories(keyword)
+            if kw_cats:
+                cat_lower = kw_cats[0].lower()
+            else:
+                cat_lower = keyword.lower()
+
         if "restaurant" in cat_lower or "food" in cat_lower or "cafe" in cat_lower:
             search_terms = ["restaurant", "family restaurant", "dhaba", "cafe", "biryani", "food court", "mess"]
         elif "pharmacy" in cat_lower or "medical" in cat_lower:
@@ -1640,6 +1832,8 @@ class OSMPlacesProvider(PlacesProvider):
                 "supermarket", "grocery store", "restaurant", "bakery",
                 "pharmacy", "clothing store", "electronics", "beauty salon"
             ]
+            if keyword and keyword.strip():
+                search_terms.insert(0, keyword.strip())
 
         results = []
         seen_ids: set = set()
@@ -1845,7 +2039,7 @@ class OSMPlacesProvider(PlacesProvider):
         # Query live OSM if we want to discover additional local establishments
         elements = []
         try:
-            elements = self._overpass_query(latitude, longitude, radius_m, target_cat)
+            elements = self._overpass_query(latitude, longitude, radius_m, target_cat, kw_str)
         except Exception as e:
             logger.warning(f"Live OSM query warning: {e}")
             elements = []
@@ -1897,7 +2091,10 @@ class OSMPlacesProvider(PlacesProvider):
             if dist > radius_km:
                 continue
 
-            if kw_str and kw_str.lower() not in name.lower():
+            cat = self._osm_category(tags)
+
+            addr_street = tags.get("addr:street", "")
+            if not is_place_matching_search(name_clean, cat, addr_street, kw_str, target_cat):
                 continue
 
             pid = f"osm_{el.get('id', '')}"
@@ -1905,11 +2102,6 @@ class OSMPlacesProvider(PlacesProvider):
                 continue
             seen_pids.add(pid)
             seen_names.add(name_lower)
-
-            cat = self._osm_category(tags)
-
-            if target_cat and not is_category_matching(cat, target_cat):
-                continue
 
             addr_parts = [
                 tags.get("addr:housenumber", ""),
@@ -2261,18 +2453,22 @@ def generate_gps_centered_places(
     matching_templates = []
     for t in BASE_COMMERCIAL_TEMPLATES:
         name, cat, street, web, rating, reviews = t
-        if target_cat and not is_category_matching(cat, target_cat):
-            continue
-        if kw and kw.lower() not in name.lower() and kw.lower() not in cat.lower():
+        if not is_place_matching_search(name, cat, street, kw, target_cat):
             continue
         matching_templates.append(t)
 
     if not matching_templates:
-        if target_cat:
+        effective_cat = target_cat
+        if not effective_cat and kw:
+            kw_cats = resolve_keyword_to_categories(kw)
+            if kw_cats:
+                effective_cat = kw_cats[0]
+        if effective_cat:
             matching_templates = [
-                (f"Sri {target_cat} Center", target_cat, "Main Bazaar", None, 4.5, 140),
-                (f"Balaji {target_cat} & Store", target_cat, "RS Road", None, 4.6, 190),
-                (f"Royal {target_cat} Mart", target_cat, "Gandhi Chowk", None, 4.4, 110),
+                (f"Sri {effective_cat} Center", effective_cat, "Main Bazaar", None, 4.5, 140),
+                (f"Balaji {effective_cat} & Store", effective_cat, "RS Road", None, 4.6, 190),
+                (f"Royal {effective_cat} Mart", effective_cat, "Gandhi Chowk", None, 4.4, 110),
+                (f"New {effective_cat} Hub", effective_cat, "Station Road", None, 4.3, 95),
             ]
         else:
             matching_templates = BASE_COMMERCIAL_TEMPLATES
