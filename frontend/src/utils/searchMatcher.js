@@ -203,6 +203,47 @@ export function resolveKeywordToCategories(keyword) {
 }
 
 /**
+ * Checks if a business matches the selected category using the alias dictionary.
+ * Returns true if shopCat, shopName, or shopAddr contains any known synonym
+ * for the selected category.
+ */
+function categoryMatchesBusiness(shopCat, shopName, shopAddr, selectedCategory) {
+  const targetCat = selectedCategory.toLowerCase().trim();
+
+  // Find the canonical category in CATEGORY_ITEM_KEYWORDS
+  let canonicalCat = null;
+  for (const catName of Object.keys(CATEGORY_ITEM_KEYWORDS)) {
+    if (catName.toLowerCase() === targetCat) {
+      canonicalCat = catName;
+      break;
+    }
+  }
+
+  // Build the set of all synonyms for this category
+  const synonyms = canonicalCat ? CATEGORY_ITEM_KEYWORDS[canonicalCat] : [];
+
+  // 1. Direct category name match (shopCat contains/is-contained-by targetCat)
+  if (shopCat === targetCat || shopCat.includes(targetCat) || targetCat.includes(shopCat)) {
+    return true;
+  }
+
+  // 2. Any synonym matches shopCat, shopName, or shopAddr
+  for (const syn of synonyms) {
+    if (
+      shopCat === syn ||
+      shopCat.includes(syn) ||
+      syn.includes(shopCat) ||
+      shopName.includes(syn) ||
+      shopAddr.includes(syn)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Checks if a business object matches a selected category and/or search keyword.
  */
 export function isBusinessMatching(business, keyword, selectedCategory) {
@@ -212,28 +253,10 @@ export function isBusinessMatching(business, keyword, selectedCategory) {
   const shopName = (business.name || '').toLowerCase().trim();
   const shopAddr = (business.address || business.short_address || '').toLowerCase().trim();
 
-  // 1. Direct Category Match if selected
+  // 1. Category filter (if a specific category is selected)
   if (selectedCategory && selectedCategory !== 'All Categories') {
-    const targetCat = selectedCategory.toLowerCase().trim();
-
-    if (targetCat === 'restaurant' || targetCat.includes('restaurant')) {
-      if (!['restaurant', 'family restaurant', 'fast food restaurant'].includes(shopCat)) return false;
-    } else if (targetCat === 'beauty salon' || targetCat.includes('salon') || targetCat.includes('spa') || targetCat.includes('barber')) {
-      if (!['beauty salon', 'hair salon', 'barber shop', 'spa'].includes(shopCat)) return false;
-    } else if (targetCat === 'bakery' || targetCat.includes('bakery')) {
-      if (!['bakery', 'pastry shop'].includes(shopCat)) return false;
-    } else if (targetCat === 'supermarket' || targetCat.includes('supermarket')) {
-      if (!['supermarket', 'hypermarket'].includes(shopCat)) return false;
-    } else if (targetCat === 'grocery store' || targetCat.includes('grocery') || targetCat.includes('general store')) {
-      if (!['grocery store', 'general store', 'convenience store'].includes(shopCat)) return false;
-    } else if (targetCat === 'pharmacy' || targetCat.includes('pharmacy') || targetCat.includes('medical')) {
-      if (!['pharmacy', 'drugstore'].includes(shopCat)) return false;
-    } else if (targetCat === 'cafe' || targetCat.includes('cafe')) {
-      if (!['cafe', 'coffee shop'].includes(shopCat)) return false;
-    } else if (targetCat === 'meat & poultry' || targetCat.includes('meat') || targetCat.includes('poultry') || targetCat.includes('chicken') || targetCat.includes('mutton') || targetCat.includes('fish')) {
-      if (!['meat & poultry', 'meat shop'].includes(shopCat)) return false;
-    } else {
-      if (shopCat !== targetCat && !shopCat.includes(targetCat) && !targetCat.includes(shopCat)) return false;
+    if (!categoryMatchesBusiness(shopCat, shopName, shopAddr, selectedCategory)) {
+      return false;
     }
   }
 
@@ -247,22 +270,30 @@ export function isBusinessMatching(business, keyword, selectedCategory) {
     return true;
   }
 
-  // Substring match on name or address
-  if (shopName.includes(kw) || shopAddr.includes(kw)) {
+  // Substring match on name, address, or category
+  if (shopName.includes(kw) || shopAddr.includes(kw) || shopCat.includes(kw)) {
     return true;
   }
 
-  // Substring or prefix match on category
-  if (shopCat.includes(kw) || shopCat.startsWith(kw) || kw.startsWith(shopCat)) {
+  // Prefix match on category
+  if (shopCat.startsWith(kw) || kw.startsWith(shopCat)) {
     return true;
   }
 
-  // Category resolution from keyword (e.g. 'resu' matches 'Restaurant', 'pizza' matches 'Restaurant')
+  // Category resolution from keyword (e.g. 'resu' → 'Restaurant', 'pizza' → 'Restaurant')
   const matchedCats = resolveKeywordToCategories(kw);
   for (const mc of matchedCats) {
     const mcLower = mc.toLowerCase();
+    // Check if resolved category matches shopCat, name, or addr
     if (shopCat.includes(mcLower) || mcLower.includes(shopCat)) {
       return true;
+    }
+    // Also check synonyms for the resolved category
+    const syns = CATEGORY_ITEM_KEYWORDS[mc] || [];
+    for (const syn of syns) {
+      if (shopCat.includes(syn) || shopName.includes(syn) || shopAddr.includes(syn)) {
+        return true;
+      }
     }
   }
 

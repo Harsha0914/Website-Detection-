@@ -110,6 +110,8 @@ def get_nearby_businesses(
     clean_kw = str(keyword).strip() if (keyword is not None and isinstance(keyword, str)) else None
     if clean_kw in ("", "None", "null"):
         clean_kw = None
+    if clean_kw and clean_cat and clean_kw.lower() == clean_cat.lower():
+        clean_kw = None
 
     places = []
     debug_info = SearchDebugInfo(
@@ -155,7 +157,7 @@ def get_nearby_businesses(
             dist = haversine_km(latitude, longitude, b.latitude, b.longitude)
             if dist > radius_km:
                 continue
-            if category and not is_category_matching(b_cat, category):
+            if clean_cat and not is_category_matching(b_cat, clean_cat):
                 continue
             pid = b.external_place_id or f"db_{b.id}"
             norm_key = (b.name.strip().lower(), round(b.latitude, 4), round(b.longitude, 4))
@@ -210,7 +212,7 @@ def get_nearby_businesses(
         if dist > max(radius_km * 3.0, 50.0):
             continue
 
-        if category and not is_category_matching(p.category, category):
+        if clean_cat and not is_category_matching(p.category, clean_cat):
             continue
 
         biz = existing_biz_map.get(p.place_id)
@@ -333,7 +335,7 @@ def get_nearby_businesses(
             continue
 
         final_cat = infer_canonical_category([], None, p.name or biz.name, current_cat=p.category or biz.category)
-        if category and not is_category_matching(final_cat, category):
+        if clean_cat and not is_category_matching(final_cat, clean_cat):
             continue
 
         b_dict = {

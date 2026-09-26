@@ -7,34 +7,30 @@ export const getBaseUrl = () => {
     if (customUrl && typeof customUrl === 'string' && customUrl.trim() !== '' && !customUrl.includes('trycloudflare.com')) {
       return customUrl.trim().replace(/\/+$/, '');
     }
-  }
 
-  // 2. Check environment variable VITE_API_URL
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '' && !envUrl.includes('trycloudflare.com')) {
-    return envUrl.trim().replace(/\/+$/, '');
-  }
-
-  if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
 
-    // Production deployment on Vercel: use relative path for instant Vercel CDN proxying & zero CORS preflight overhead
-    if (hostname.endsWith('vercel.app') || hostname.includes('vercel.app') || hostname.includes('pages.dev')) {
-      return '';
-    }
-
-    // Local development
+    // 2. Localhost development always points to local backend on port 8001
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8001';
     }
 
-    // Mobile access on local Wi-Fi (e.g. 192.168.x.x)
+    // 3. Mobile access on local Wi-Fi (e.g. 192.168.x.x)
     const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
     if (isPrivateIp) {
       return `http://${hostname}:8001`;
     }
 
-    return '';
+    // 4. Production deployment on Vercel/Pages: use relative path for CDN proxying
+    if (hostname.endsWith('vercel.app') || hostname.includes('vercel.app') || hostname.includes('pages.dev')) {
+      return '';
+    }
+  }
+
+  // 5. Environment variable VITE_API_URL for explicitly configured production or build targets
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '' && !envUrl.includes('trycloudflare.com')) {
+    return envUrl.trim().replace(/\/+$/, '');
   }
 
   return 'https://website-backend-d8t5.onrender.com';

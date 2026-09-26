@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MapPin,
@@ -17,6 +17,7 @@ import { formatDistance, estimateRoadDistance, estimateDriveTime } from '../../s
 import { useShopStore } from '../../store/shopStore';
 import { getGoogleMapsUrl, getGoogleMapsDirectionsUrl } from '../../services/locationService';
 import { getWhatsAppUrl, launchWhatsAppApp } from '../../services/whatsappService';
+import WhatsAppLaunchModal from '../chat/WhatsAppLaunchModal';
 
 const CATEGORY_IMAGES = {
   'Grocery Store': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&q=80&auto=format&fit=crop',
@@ -52,6 +53,7 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
   const { userGps } = useShopStore();
   const hasWebsite = business.website_status === 'WEBSITE_AVAILABLE';
   const shopPhoto = getBusinessPhoto(business);
+  const [showWAModal, setShowWAModal] = useState(false);
 
   // Exact Google Maps location link (pinned at coordinates with label)
   const googleMapsUrl = getGoogleMapsUrl(business);
@@ -65,6 +67,7 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
   const displayAddress = business.address || business.short_address;
 
   return (
+  <>
     <div
       onClick={onSelect}
       className={`group relative bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden shrink-0 ${
@@ -202,19 +205,19 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
             <span>Directions</span>
           </a>
 
-          {/* Direct WhatsApp Contact Button */}
+          {/* Direct WhatsApp Contact Button – opens template modal */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              launchWhatsAppApp(business);
+              setShowWAModal(true);
             }}
             className={`flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-extrabold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer ${
               !hasWebsite
                 ? 'text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400/40'
                 : 'text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/20'
             }`}
-            title={!hasWebsite ? `Directly open WhatsApp and send website pitch to ${business.name}` : `Chat with ${business.name} on WhatsApp`}
+            title={!hasWebsite ? `Send a WhatsApp pitch to ${business.name} (Lexon IT)` : `Chat with ${business.name} on WhatsApp`}
           >
             <MessageCircle className="w-3.5 h-3.5 text-emerald-100 animate-pulse" />
             <span>{!hasWebsite ? '⚡ Send WhatsApp Pitch' : 'WhatsApp'}</span>
@@ -248,6 +251,14 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
       </div>
     </div>
   </div>
+
+  {/* WhatsApp Launch Modal */}
+  <WhatsAppLaunchModal
+    business={business}
+    isOpen={showWAModal}
+    onClose={() => setShowWAModal(false)}
+  />
+  </>
   );
 }
 

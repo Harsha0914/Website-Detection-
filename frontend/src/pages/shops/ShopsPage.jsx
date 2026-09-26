@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Store,
@@ -22,6 +22,8 @@ import {
   MessageCircle,
   Send,
   Bot,
+  Star,
+  ArrowUpDown,
 } from 'lucide-react';
 import Navbar from '../../components/layout/Navbar';
 import Footer from '../../components/layout/Footer';
@@ -125,9 +127,12 @@ export default function ShopsPage({ defaultTab = 'all' }) {
   const [tempKeyword,  setTempKeyword]  = useState(keyword || '');
   const [modalKey,     setModalKey]     = useState(0);
   const [showKeyModal, setShowKeyModal] = useState(false);
+  const [selectedRating, setSelectedRating] = useState('all');
+  const [sortBy, setSortBy] = useState('rating-desc');
 
   useEffect(() => { 
-    if (businesses.length === 0) {
+    // Only auto-search if no results AND not already loading (avoids duplicate searches from dashboard)
+    if (businesses.length === 0 && !loading) {
       searchNearby().catch(() => {});
     }
   }, []);
@@ -151,30 +156,106 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [businesses]);
 
-  const filteredBusinesses = businesses.filter(b => {
-    // 0. Exclude permanently & temporarily closed shops
-    const status = (b.business_status || 'OPERATIONAL').toUpperCase().trim();
-    if (status !== 'OPERATIONAL' || status === 'CLOSED_PERMANENTLY' || status === 'PERMANENTLY_CLOSED' || status === 'CLOSED' || status === 'CLOSED_TEMPORARILY' || status === 'TEMPORARILY_CLOSED') return false;
+  const baseFilteredBusinesses = useMemo(() => {
+    return businesses.filter(b => {
+      // 0. Exclude permanently & temporarily closed shops
+      const status = (b.business_status || 'OPERATIONAL').toUpperCase().trim();
+      if (status !== 'OPERATIONAL' || status === 'CLOSED_PERMANENTLY' || status === 'PERMANENTLY_CLOSED' || status === 'CLOSED' || status === 'CLOSED_TEMPORARILY' || status === 'TEMPORARILY_CLOSED') return false;
 
-    const nameLower = (b.name || '').toLowerCase();
-    if (nameLower.includes('(permanently closed)') || nameLower.includes('[permanently closed]') || nameLower.includes('(closed)') || nameLower.includes('closed permanently')) return false;
+      const nameLower = (b.name || '').toLowerCase();
+      if (nameLower.includes('(permanently closed)') || nameLower.includes('[permanently closed]') || nameLower.includes('(closed)') || nameLower.includes('closed permanently')) return false;
 
-    // 1. Strict radius enforcement (allow nearest fallback if overall set is small)
-    const maxAllowedDist = businesses.length <= 5 ? Math.max(radiusKm, 35.0) : Math.max(radiusKm, 25.0);
-    if (b.distance_km != null && b.distance_km > maxAllowedDist) return false;
+      // 1. Strict radius enforcement
+      // Only expand the radius as a fallback when we have very few results overall
+      const maxAllowedDist = businesses.length <= 3 ? Math.max(radiusKm, 15.0) : radiusKm * 1.1;
+      if (b.distance_km != null && b.distance_km > maxAllowedDist) return false;
 
-    // 2. Category & Keyword Match (with semantic items, aliases, prefixes)
-    if (!isBusinessMatching(b, keyword, category)) {
-      return false;
-    }
+      // 2. Category & Keyword Match (with semantic items, aliases, prefixes)
+      if (!isBusinessMatching(b, keyword, category)) {
+        return false;
+      }
 
-    // 3. Tab filter
-    if (activeTab === 'websites')          return b.website_status === 'WEBSITE_AVAILABLE';
-    if (activeTab === 'no-websites')       return b.website_status === 'NO_WEBSITE' || b.website_status === 'WEBSITE_UNREACHABLE';
-    if (activeTab === 'good-websites')     return b.website_score != null && b.website_score >= 80;
-    if (activeTab === 'needs-improvement') return b.website_status === 'WEBSITE_AVAILABLE' && (b.website_score == null || b.website_score < 80);
-    return true;
-  });
+      // 3. Tab filter
+      if (activeTab === 'websites')          return b.website_status === 'WEBSITE_AVAILABLE';
+      if (activeTab === 'no-websites')       return b.website_status === 'NO_WEBSITE' || b.website_status === 'WEBSITE_UNREACHABLE';
+      if (activeTab === 'good-websites')     return b.website_score != null && b.website_score >= 80;
+      if (activeTab === 'needs-improvement') return b.website_status === 'WEBSITE_AVAILABLE' && (b.website_score == null || b.website_score < 80);
+      return true;
+    });
+  }, [businesses, radiusKm, keyword, category, activeTab]);
+
+  // Compute live rating counts over the current category & location results
+  const ratingCounts = useMemo(() => {
+    const counts = {
+      all: baseFilteredBusinesses.length,
+      5: 0,
+      4: 0,
+      3: 0,
+      2: 0,
+      1: 0,
+      fourPlus: 0,
+      unrated: 0,
+    };
+    baseFilteredBusinesses.forEach(b => {
+      const r = b.rating;
+      if (r == null || isNaN(r) || r <= 0) {
+        counts.unrated++;
+        return;
+      }
+      if (r >= 4.5) counts[5]++;
+      else if (r >= 4.0) counts[4]++;
+      else if (r >= 3.0) counts[3]++;
+      else if (r >= 2.0) counts[2]++;
+      else if (r >= 1.0) counts[1]++;
+
+      if (r >= 4.0) counts.fourPlus++;
+    });
+    return counts;
+  }, [baseFilteredBusinesses]);
+
+  // Filter and sort businesses ratings-wise
+  const filteredBusinesses = useMemo(() => {
+    let result = baseFilteredBusinesses.filter(b => {
+      if (selectedRating === 'all') return true;
+      const r = b.rating;
+      if (selectedRating === 'unrated') {
+        return r == null || isNaN(r) || r <= 0;
+      }
+      if (r == null || isNaN(r) || r <= 0) return false;
+
+      if (selectedRating === '5') return r >= 4.5;
+      if (selectedRating === '4') return r >= 4.0 && r < 4.5;
+      if (selectedRating === '3') return r >= 3.0 && r < 4.0;
+      if (selectedRating === '2') return r >= 2.0 && r < 3.0;
+      if (selectedRating === '1') return r >= 1.0 && r < 2.0;
+      if (selectedRating === '4plus') return r >= 4.0;
+      return true;
+    });
+
+    // Sorting
+    return [...result].sort((a, b) => {
+      if (sortBy === 'rating-desc') {
+        const rA = a.rating != null && !isNaN(a.rating) ? a.rating : -1;
+        const rB = b.rating != null && !isNaN(b.rating) ? b.rating : -1;
+        if (rB !== rA) return rB - rA;
+        return (a.distance_km || 999) - (b.distance_km || 999);
+      }
+      if (sortBy === 'rating-asc') {
+        const rA = a.rating != null && !isNaN(a.rating) ? a.rating : 999;
+        const rB = b.rating != null && !isNaN(b.rating) ? b.rating : 999;
+        if (rA !== rB) return rA - rB;
+        return (a.distance_km || 999) - (b.distance_km || 999);
+      }
+      if (sortBy === 'reviews') {
+        const revA = a.review_count || 0;
+        const revB = b.review_count || 0;
+        if (revB !== revA) return revB - revA;
+        return (b.rating || 0) - (a.rating || 0);
+      }
+      // default 'distance'
+      return (a.distance_km || 999) - (b.distance_km || 999);
+    });
+  }, [baseFilteredBusinesses, selectedRating, sortBy]);
 
   // Shops without website available for bulk outreach
   const noWebsiteShops = React.useMemo(() => {
@@ -750,7 +831,10 @@ export default function ShopsPage({ defaultTab = 'all' }) {
               </span>
               <button
                 type="button"
-                onClick={() => setCategory('')}
+                onClick={() => {
+                  setCategory('');
+                  setSelectedRating('all');
+                }}
                 style={{
                   padding: '6px 14px',
                   borderRadius: '12px',
@@ -773,7 +857,11 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                   <button
                     key={catName}
                     type="button"
-                    onClick={() => setCategory(isCatActive ? '' : catName)}
+                    onClick={() => {
+                      setCategory(isCatActive ? '' : catName);
+                      setSelectedRating('all');
+                      setSortBy('rating-desc');
+                    }}
                     style={{
                       padding: '6px 14px',
                       borderRadius: '12px',
@@ -807,6 +895,339 @@ export default function ShopsPage({ defaultTab = 'all' }) {
               })}
             </div>
           )}
+
+          {/* ── Ratings Filter & Sort Bar ── */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            marginTop: '10px',
+            paddingTop: '10px',
+            borderTop: '1px dashed var(--sp-border)',
+            flexWrap: 'wrap',
+          }}>
+            {/* Rating Filter Pills */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              overflowX: 'auto',
+              paddingBottom: '2px',
+              flex: '1',
+              minWidth: '280px',
+            }}>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                color: '#d97706',
+                letterSpacing: '0.05em',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}>
+                <Star style={{ width: 13, height: 13, fill: '#f59e0b', color: '#f59e0b' }} />
+                Ratings:
+              </span>
+
+              {/* All Ratings */}
+              <button
+                type="button"
+                onClick={() => setSelectedRating('all')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  border: selectedRating === 'all' ? '1.5px solid #f59e0b' : '1px solid var(--sp-border)',
+                  background: selectedRating === 'all' ? '#f59e0b' : 'var(--sp-card)',
+                  color: selectedRating === 'all' ? '#fff' : 'var(--sp-text)',
+                  boxShadow: selectedRating === 'all' ? '0 2px 6px rgba(245,158,11,0.3)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+              >
+                <span>All Ratings</span>
+                <span style={{
+                  padding: '1px 5px',
+                  borderRadius: '99px',
+                  fontSize: '9.5px',
+                  fontWeight: 900,
+                  background: selectedRating === 'all' ? 'rgba(255,255,255,0.28)' : 'rgba(245,158,11,0.12)',
+                  color: selectedRating === 'all' ? '#fff' : '#d97706',
+                }}>
+                  {ratingCounts.all}
+                </span>
+              </button>
+
+              {/* 5 Stars */}
+              <button
+                type="button"
+                onClick={() => setSelectedRating(selectedRating === '5' ? 'all' : '5')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  border: selectedRating === '5' ? '1.5px solid #f59e0b' : '1px solid var(--sp-border)',
+                  background: selectedRating === '5' ? '#f59e0b' : 'var(--sp-card)',
+                  color: selectedRating === '5' ? '#fff' : 'var(--sp-text)',
+                  boxShadow: selectedRating === '5' ? '0 2px 6px rgba(245,158,11,0.3)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+                title="5 Stars (Rating 4.5 – 5.0)"
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>5</span>
+                  <Star style={{ width: 11, height: 11, fill: selectedRating === '5' ? '#fff' : '#f59e0b', color: selectedRating === '5' ? '#fff' : '#f59e0b' }} />
+                </span>
+                <span style={{
+                  padding: '1px 5px',
+                  borderRadius: '99px',
+                  fontSize: '9.5px',
+                  fontWeight: 900,
+                  background: selectedRating === '5' ? 'rgba(255,255,255,0.28)' : 'rgba(245,158,11,0.12)',
+                  color: selectedRating === '5' ? '#fff' : '#d97706',
+                }}>
+                  {ratingCounts[5]}
+                </span>
+              </button>
+
+              {/* 4 Stars */}
+              <button
+                type="button"
+                onClick={() => setSelectedRating(selectedRating === '4' ? 'all' : '4')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  border: selectedRating === '4' ? '1.5px solid #f59e0b' : '1px solid var(--sp-border)',
+                  background: selectedRating === '4' ? '#f59e0b' : 'var(--sp-card)',
+                  color: selectedRating === '4' ? '#fff' : 'var(--sp-text)',
+                  boxShadow: selectedRating === '4' ? '0 2px 6px rgba(245,158,11,0.3)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+                title="4 Stars (Rating 4.0 – 4.4)"
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>4</span>
+                  <Star style={{ width: 11, height: 11, fill: selectedRating === '4' ? '#fff' : '#f59e0b', color: selectedRating === '4' ? '#fff' : '#f59e0b' }} />
+                </span>
+                <span style={{
+                  padding: '1px 5px',
+                  borderRadius: '99px',
+                  fontSize: '9.5px',
+                  fontWeight: 900,
+                  background: selectedRating === '4' ? 'rgba(255,255,255,0.28)' : 'rgba(245,158,11,0.12)',
+                  color: selectedRating === '4' ? '#fff' : '#d97706',
+                }}>
+                  {ratingCounts[4]}
+                </span>
+              </button>
+
+              {/* 3 Stars */}
+              <button
+                type="button"
+                onClick={() => setSelectedRating(selectedRating === '3' ? 'all' : '3')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  border: selectedRating === '3' ? '1.5px solid #f59e0b' : '1px solid var(--sp-border)',
+                  background: selectedRating === '3' ? '#f59e0b' : 'var(--sp-card)',
+                  color: selectedRating === '3' ? '#fff' : 'var(--sp-text)',
+                  boxShadow: selectedRating === '3' ? '0 2px 6px rgba(245,158,11,0.3)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+                title="3 Stars (Rating 3.0 – 3.9)"
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>3</span>
+                  <Star style={{ width: 11, height: 11, fill: selectedRating === '3' ? '#fff' : '#f59e0b', color: selectedRating === '3' ? '#fff' : '#f59e0b' }} />
+                </span>
+                <span style={{
+                  padding: '1px 5px',
+                  borderRadius: '99px',
+                  fontSize: '9.5px',
+                  fontWeight: 900,
+                  background: selectedRating === '3' ? 'rgba(255,255,255,0.28)' : 'rgba(245,158,11,0.12)',
+                  color: selectedRating === '3' ? '#fff' : '#d97706',
+                }}>
+                  {ratingCounts[3]}
+                </span>
+              </button>
+
+              {/* 2 Stars */}
+              <button
+                type="button"
+                onClick={() => setSelectedRating(selectedRating === '2' ? 'all' : '2')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  border: selectedRating === '2' ? '1.5px solid #f59e0b' : '1px solid var(--sp-border)',
+                  background: selectedRating === '2' ? '#f59e0b' : 'var(--sp-card)',
+                  color: selectedRating === '2' ? '#fff' : 'var(--sp-text)',
+                  boxShadow: selectedRating === '2' ? '0 2px 6px rgba(245,158,11,0.3)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+                title="2 Stars (Rating 2.0 – 2.9)"
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>2</span>
+                  <Star style={{ width: 11, height: 11, fill: selectedRating === '2' ? '#fff' : '#f59e0b', color: selectedRating === '2' ? '#fff' : '#f59e0b' }} />
+                </span>
+                <span style={{
+                  padding: '1px 5px',
+                  borderRadius: '99px',
+                  fontSize: '9.5px',
+                  fontWeight: 900,
+                  background: selectedRating === '2' ? 'rgba(255,255,255,0.28)' : 'rgba(245,158,11,0.12)',
+                  color: selectedRating === '2' ? '#fff' : '#d97706',
+                }}>
+                  {ratingCounts[2]}
+                </span>
+              </button>
+
+              {/* 1 Star */}
+              <button
+                type="button"
+                onClick={() => setSelectedRating(selectedRating === '1' ? 'all' : '1')}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  border: selectedRating === '1' ? '1.5px solid #f59e0b' : '1px solid var(--sp-border)',
+                  background: selectedRating === '1' ? '#f59e0b' : 'var(--sp-card)',
+                  color: selectedRating === '1' ? '#fff' : 'var(--sp-text)',
+                  boxShadow: selectedRating === '1' ? '0 2px 6px rgba(245,158,11,0.3)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+                title="1 Star (Rating 1.0 – 1.9)"
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>1</span>
+                  <Star style={{ width: 11, height: 11, fill: selectedRating === '1' ? '#fff' : '#f59e0b', color: selectedRating === '1' ? '#fff' : '#f59e0b' }} />
+                </span>
+                <span style={{
+                  padding: '1px 5px',
+                  borderRadius: '99px',
+                  fontSize: '9.5px',
+                  fontWeight: 900,
+                  background: selectedRating === '1' ? 'rgba(255,255,255,0.28)' : 'rgba(245,158,11,0.12)',
+                  color: selectedRating === '1' ? '#fff' : '#d97706',
+                }}>
+                  {ratingCounts[1]}
+                </span>
+              </button>
+
+              {/* 4.0+ Stars button */}
+              {ratingCounts.fourPlus > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedRating(selectedRating === '4plus' ? 'all' : '4plus')}
+                  style={{
+                    padding: '5px 10px',
+                    borderRadius: '10px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    border: selectedRating === '4plus' ? '1.5px solid #f59e0b' : '1px solid var(--sp-border)',
+                    background: selectedRating === '4plus' ? '#f59e0b' : 'var(--sp-card)',
+                    color: selectedRating === '4plus' ? '#fff' : 'var(--sp-text)',
+                    boxShadow: selectedRating === '4plus' ? '0 2px 6px rgba(245,158,11,0.3)' : 'none',
+                    transition: 'all 0.15s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  title="4.0 Stars and above"
+                >
+                  <span>4.0+</span>
+                  <Star style={{ width: 10, height: 10, fill: selectedRating === '4plus' ? '#fff' : '#f59e0b', color: selectedRating === '4plus' ? '#fff' : '#f59e0b' }} />
+                  <span style={{
+                    padding: '1px 5px',
+                    borderRadius: '99px',
+                    fontSize: '9.5px',
+                    fontWeight: 900,
+                    background: selectedRating === '4plus' ? 'rgba(255,255,255,0.28)' : 'rgba(245,158,11,0.12)',
+                    color: selectedRating === '4plus' ? '#fff' : '#d97706',
+                  }}>
+                    {ratingCounts.fourPlus}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {/* Sort Selector */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginLeft: 'auto',
+            }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--sp-muted)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <ArrowUpDown style={{ width: 12, height: 12 }} />
+                Sort:
+              </span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '10px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  border: '1.5px solid var(--sp-border)',
+                  background: 'var(--sp-card)',
+                  color: 'var(--sp-text)',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value="rating-desc">⭐ Highest Rating (5★ → 1★)</option>
+                <option value="distance">📍 Distance (Nearest First)</option>
+                <option value="reviews">💬 Most Reviews</option>
+                <option value="rating-asc">⭐ Lowest Rating (1★ → 5★)</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* ── API Diagnostic Notice ── */}
@@ -842,15 +1263,25 @@ export default function ShopsPage({ defaultTab = 'all' }) {
             </div>
           ) : filteredBusinesses.length === 0 ? (
             <EmptyState
-              title={activeTab !== 'all' ? `No shops found under "${activeTabCfg.label}"` : "No shops found in this radius"}
+              title={
+                selectedRating !== 'all'
+                  ? `No shops found with ${selectedRating === '5' ? '5★ (4.5–5.0)' : selectedRating === '4' ? '4★ (4.0–4.4)' : selectedRating === '3' ? '3★ (3.0–3.9)' : selectedRating === '2' ? '2★ (2.0–2.9)' : selectedRating === '1' ? '1★ (1.0–1.9)' : selectedRating === '4plus' ? '4.0+ Stars' : 'selected'} rating`
+                  : activeTab !== 'all'
+                  ? `No shops found under "${activeTabCfg.label}"`
+                  : "No shops found in this radius"
+              }
               description={
-                total > 0
+                selectedRating !== 'all'
+                  ? `There are ${baseFilteredBusinesses.length} other shops matching this category/search. Click below to view all ratings.`
+                  : total > 0
                   ? `There are ${total} other shops found in this area. Switch to 'All Shops' or expand your radius to view them.`
                   : `No businesses found within ${radiusKm} km of ${locationName}. Try choosing a quick city above or expanding the search radius.`
               }
-              actionLabel={total > 0 && activeTab !== 'all' ? `View All Shops (${total})` : "Expand Radius to 50 km"}
+              actionLabel={selectedRating !== 'all' ? "Show All Ratings" : (total > 0 && activeTab !== 'all' ? `View All Shops (${total})` : "Expand Radius to 50 km")}
               onAction={() => {
-                if (total > 0 && activeTab !== 'all') {
+                if (selectedRating !== 'all') {
+                  setSelectedRating('all');
+                } else if (total > 0 && activeTab !== 'all') {
                   setActiveTab('all');
                 } else {
                   setRadius(50);
@@ -875,6 +1306,43 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                       : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
                   }`}
                 >
+                  {/* Rating filter active banner */}
+                  {selectedRating !== 'all' && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 14px',
+                      borderRadius: '12px',
+                      background: 'rgba(245, 158, 11, 0.12)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      marginBottom: '12px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      color: '#d97706',
+                    }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Star style={{ width: 14, height: 14, fill: '#f59e0b', color: '#f59e0b' }} />
+                        Filtered: <strong>{selectedRating === '5' ? '5 Stars (4.5–5.0)' : selectedRating === '4' ? '4 Stars (4.0–4.4)' : selectedRating === '3' ? '3 Stars (3.0–3.9)' : selectedRating === '2' ? '2 Stars (2.0–2.9)' : selectedRating === '1' ? '1 Star (1.0–1.9)' : selectedRating === '4plus' ? '4.0+ Stars' : 'Unrated'}</strong> ({filteredBusinesses.length} shops)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRating('all')}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#b45309',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        Clear filter
+                      </button>
+                    </div>
+                  )}
+
                   {filteredBusinesses.map((b) => (
                     <BusinessCard
                       key={b.id}

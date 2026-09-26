@@ -338,7 +338,8 @@ export const useShopStore = create((set, get) => ({
         const exactDist = calculateDistance(latNum, lngNum, p.latitude, p.longitude);
         const distKm = exactDist != null ? exactDist : (p.distance_km || 0);
 
-        const maxRadAllowed = finalPlaces.length <= 5 ? Math.max(radNum, 35.0) : Math.max(radNum, 25.0);
+        // Only expand radius as fallback when very few results returned overall
+        const maxRadAllowed = finalPlaces.length <= 3 ? Math.max(radNum, 15.0) : radNum * 1.1;
         if (distKm > maxRadAllowed) {
           continue;
         }

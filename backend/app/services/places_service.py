@@ -139,6 +139,23 @@ def _get_db_real_places(
     seen_keys = set()
     seen_pids = set()
 
+    clean_cat = category.strip() if (category and isinstance(category, str)) else None
+    if clean_cat in ("", "All Categories", "All Shops", "None", "null"):
+        clean_cat = None
+
+    clean_kw = keyword.strip() if (keyword and isinstance(keyword, str)) else None
+    if clean_kw in ("", "None", "null"):
+        clean_kw = None
+
+    # Pre-resolve keyword categories once outside the loop to avoid millions of Levenshtein calculations
+    precomputed_matched_cats = resolve_keyword_to_categories(clean_kw.lower()) if clean_kw else None
+
+    # Bounding box delta for instant distance culling
+    search_limit_km = max(radius_km * 2.5, 35.0)
+    lat_deg_delta = search_limit_km / 110.0 + 0.05
+    cos_lat = max(0.1, abs(math.cos(math.radians(latitude))))
+    lng_deg_delta = search_limit_km / (110.0 * cos_lat) + 0.05
+
     # 1. First include verified regional places in-memory
     try:
         from app.services.verified_shops_data import VERIFIED_REGIONAL_PLACES
@@ -149,10 +166,20 @@ def _get_db_real_places(
             v_name = vp.get("name")
             if v_lat is None or v_lng is None or not v_name:
                 continue
-            dist = haversine_km(latitude, longitude, v_lat, v_lng)
-            v_cat = infer_canonical_category([], None, v_name, current_cat=vp.get("category"))
+
+            # Instant bounding box check (skips distant cities in 1 instruction)
+            if abs(v_lat - latitude) > lat_deg_delta or abs(v_lng - longitude) > lng_deg_delta:
+                continue
+
+            v_cat = vp.get("category") or "General Store"
             v_addr = vp.get("address", "")
-            if not is_place_matching_search(v_name, v_cat, v_addr, keyword, category):
+
+            # Match search using precomputed keyword categories
+            if not is_place_matching_search(v_name, v_cat, v_addr, clean_kw, clean_cat, precomputed_matched_cats=precomputed_matched_cats):
+                continue
+
+            dist = haversine_km(latitude, longitude, v_lat, v_lng)
+            if dist > search_limit_km:
                 continue
 
             norm_key = (v_name.strip().lower(), round(v_lat, 4), round(v_lng, 4))
@@ -223,12 +250,15 @@ def _get_db_real_places(
             if any(w in name_lower for w in ["(permanently closed)", "[permanently closed]", "(closed)", "permanently closed", "closed permanently"]):
                 continue
 
-            dist = haversine_km(latitude, longitude, lat, lng)
-            if dist > radius_km:
+            if abs(lat - latitude) > lat_deg_delta or abs(lng - longitude) > lng_deg_delta:
                 continue
 
-            canonical_cat = infer_canonical_category([], None, name, current_cat=cat)
-            if not is_place_matching_search(name, canonical_cat, addr, keyword, category):
+            canonical_cat = cat or infer_canonical_category([], None, name, current_cat=cat)
+            if not is_place_matching_search(name, canonical_cat, addr, clean_kw, clean_cat, precomputed_matched_cats=precomputed_matched_cats):
+                continue
+
+            dist = haversine_km(latitude, longitude, lat, lng)
+            if dist > radius_km:
                 continue
 
             norm_key = (name.strip().lower(), round(lat, 4), round(lng, 4))
@@ -1022,7 +1052,8 @@ def is_place_matching_search(
     place_category: str | None,
     place_address: str | None,
     keyword: str | None = None,
-    category: str | None = None
+    category: str | None = None,
+    precomputed_matched_cats: list[str] | None = None
 ) -> bool:
     """
     Checks if a place matches the requested category and/or keyword.
@@ -1040,6 +1071,10 @@ def is_place_matching_search(
     if kw in ("all", "all categories", "all shops", "none", "null"):
         return True
 
+    # If keyword matches the category name itself (e.g. user selected or typed "restaurant" or "supermarket")
+    if category and (kw == category.strip().lower() or category.strip().lower() in kw or kw in category.strip().lower()):
+        return True
+
     name_l = (place_name or "").lower()
     cat_l = (place_category or "").lower()
     addr_l = (place_address or "").lower()
@@ -1048,16 +1083,16 @@ def is_place_matching_search(
     if kw in name_l or (addr_l and kw in addr_l):
         return True
 
+    # Prefix match on category name
+    if cat_l.startswith(kw) or kw.startswith(cat_l):
+        return True
+
     # Check if keyword matches the place's category or any category alias
-    matched_cats = resolve_keyword_to_categories(kw)
+    matched_cats = precomputed_matched_cats if precomputed_matched_cats is not None else resolve_keyword_to_categories(kw)
     if matched_cats:
         for mc in matched_cats:
             if is_category_matching(place_category, mc):
                 return True
-
-    # Prefix match on category name
-    if cat_l.startswith(kw) or kw.startswith(cat_l):
-        return True
 
     # Fuzzy match directly on category name
     if len(kw) >= 4 and len(cat_l) >= 4:
@@ -1236,7 +1271,8 @@ class GooglePlacesProvider(PlacesProvider):
         # without hitting Google API (which adds 3-9s latency and may fail)
         _fast_cat = canonical_category or (category.strip() if category else None)
         _fast_db = _get_db_real_places(latitude, longitude, radius_km, _fast_cat, keyword)
-        if len(_fast_db) >= 10:
+        min_required = 1 if _fast_cat else 5
+        if len(_fast_db) >= min_required:
             now = time.time()
             fast_debug = SearchDebugInfo(
                 search_origin_lat=latitude,
