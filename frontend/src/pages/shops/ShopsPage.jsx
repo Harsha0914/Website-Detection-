@@ -143,6 +143,17 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     setTempCategory(category || 'All Categories');
     setTempKeyword(keyword || '');
     setModalKey(k => k + 1);
+
+    if (showModifyModal) {
+      const prevBodyOverflow = document.body.style.overflow;
+      const prevHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevBodyOverflow;
+        document.documentElement.style.overflow = prevHtmlOverflow;
+      };
+    }
   }, [showModifyModal]);
 
   // Available Categories dynamically computed within the active radius
@@ -476,26 +487,36 @@ export default function ShopsPage({ defaultTab = 'all' }) {
 
         /* ===== MODAL ===== */
         .sp-overlay {
-          position:fixed; inset:0; z-index:60;
-          background:rgba(8,13,26,.6); backdrop-filter:blur(6px);
+          position:fixed; inset:0; z-index:9999;
+          background:rgba(8,13,26,.65); backdrop-filter:blur(6px);
           display:flex; align-items:center; justify-content:center; padding:16px;
           animation:sp-fadein .2s ease;
+          overflow-y:auto;
+          overscroll-behavior:contain;
         }
         .sp-modal {
-          background:var(--sp-card); border-radius:24px; max-width:500px; width:100%;
+          background:var(--sp-card); border-radius:24px; max-width:520px; width:100%;
+          max-height:calc(100vh - 36px);
+          max-height:calc(100dvh - 36px);
+          display:flex; flex-direction:column;
           border:1.5px solid var(--sp-border);
           box-shadow:0 24px 80px rgba(0,0,0,.25); overflow:hidden;
           animation:sp-fadein .25s ease;
+          position:relative;
+          margin:auto;
         }
         .sp-modal-header {
-          padding:22px 24px 0;
+          padding:20px 24px 16px;
           display:flex; align-items:center; justify-content:space-between;
+          flex-shrink:0;
+          border-bottom:1px solid var(--sp-border);
         }
         .sp-modal-icon {
           width:40px; height:40px; border-radius:12px;
           background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.08));
           border:1.5px solid rgba(99,102,241,.2);
           display:flex; align-items:center; justify-content:center;
+          flex-shrink:0;
         }
         .sp-modal-title {
           font-size:15px; font-weight:900; color:var(--sp-text); letter-spacing:-.02em;
@@ -505,9 +526,31 @@ export default function ShopsPage({ defaultTab = 'all' }) {
           display:flex; align-items:center; justify-content:center;
           cursor:pointer; background:transparent; color:var(--sp-muted);
           transition:all .2s;
+          flex-shrink:0;
         }
         .sp-modal-close:hover { border-color:var(--sp-accent); color:var(--sp-accent); }
-        .sp-modal-body { padding:20px 24px; display:flex; flex-direction:column; gap:18px; }
+        .sp-modal-body {
+          padding:20px 24px;
+          display:flex; flex-direction:column; gap:18px;
+          overflow-y:auto;
+          flex:1;
+          min-height:0;
+          overscroll-behavior:contain;
+          -webkit-overflow-scrolling:touch;
+        }
+        .sp-modal-body::-webkit-scrollbar {
+          width:6px;
+        }
+        .sp-modal-body::-webkit-scrollbar-track {
+          background:transparent;
+        }
+        .sp-modal-body::-webkit-scrollbar-thumb {
+          background:rgba(99,102,241,0.25);
+          border-radius:10px;
+        }
+        .sp-modal-body::-webkit-scrollbar-thumb:hover {
+          background:rgba(99,102,241,0.5);
+        }
         .sp-modal-label {
           font-size:10px; font-weight:800; text-transform:uppercase;
           letter-spacing:.08em; color:var(--sp-muted); margin-bottom:8px;
@@ -534,7 +577,11 @@ export default function ShopsPage({ defaultTab = 'all' }) {
         .sp-modal-input:focus { border-color:var(--sp-accent); box-shadow:0 0 0 3px var(--sp-glow); }
         .sp-modal-input::placeholder { color:var(--sp-muted); }
         .sp-modal-footer {
-          padding:0 24px 24px; display:flex; gap:10px;
+          padding:16px 24px 20px;
+          display:flex; gap:10px;
+          flex-shrink:0;
+          border-top:1px solid var(--sp-border);
+          background:var(--sp-card);
         }
         .sp-modal-cancel {
           flex:1; padding:13px; border-radius:14px;
