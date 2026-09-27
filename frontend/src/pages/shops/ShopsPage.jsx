@@ -825,11 +825,11 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                placeholder="Quick search items or category (e.g. resu, biryani, cake, meds)..."
+                placeholder="Quick search items or category (e.g. resu, biryani, cake, med)"
                 style={{
                   width: '100%',
-                  padding: '8px 32px 8px 34px',
-                  borderRadius: '12px',
+                  padding: '9px 36px 9px 36px',
+                  borderRadius: '9999px',
                   border: '1.5px solid var(--sp-border)',
                   background: 'var(--sp-card)',
                   fontSize: '12px',
@@ -837,6 +837,7 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                   color: 'var(--sp-text)',
                   outline: 'none',
                   boxSizing: 'border-box',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
                 }}
               />
               {keyword && (
@@ -845,7 +846,7 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                   onClick={() => setKeyword('')}
                   style={{
                     position: 'absolute',
-                    right: '10px',
+                    right: '12px',
                     top: '50%',
                     transform: 'translateY(-50%)',
                     background: 'transparent',
@@ -871,10 +872,11 @@ export default function ShopsPage({ defaultTab = 'all' }) {
               alignItems: 'center',
               gap: '8px',
               overflowX: 'auto',
-              paddingBottom: '6px',
+              paddingBottom: '8px',
             }}>
-              <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--sp-muted)', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                📍 Within {radiusKm} km:
+              <span style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: '#ef4444', letterSpacing: '0.05em', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <MapPin style={{ width: 12, height: 12, color: '#ef4444' }} />
+                <span>WITHIN {radiusKm} KM:</span>
               </span>
               <button
                 type="button"
@@ -883,16 +885,16 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                   setSelectedRating('all');
                 }}
                 style={{
-                  padding: '6px 14px',
-                  borderRadius: '12px',
+                  padding: '6px 16px',
+                  borderRadius: '9999px',
                   fontSize: '11.5px',
                   fontWeight: 800,
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
-                  border: !category || category === 'All Categories' ? '1.5px solid var(--sp-accent)' : '1px solid var(--sp-border)',
-                  background: !category || category === 'All Categories' ? 'var(--sp-accent)' : 'var(--sp-card)',
+                  border: !category || category === 'All Categories' ? '1.5px solid #4f46e5' : '1px solid var(--sp-border)',
+                  background: !category || category === 'All Categories' ? '#4f46e5' : 'var(--sp-card)',
                   color: !category || category === 'All Categories' ? '#fff' : 'var(--sp-text)',
-                  boxShadow: !category || category === 'All Categories' ? '0 2px 8px var(--sp-glow)' : 'none',
+                  boxShadow: !category || category === 'All Categories' ? '0 2px 8px rgba(79, 70, 229, 0.35)' : 'none',
                   transition: 'all 0.15s ease',
                 }}
               >
@@ -911,15 +913,15 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                     }}
                     style={{
                       padding: '6px 14px',
-                      borderRadius: '12px',
+                      borderRadius: '9999px',
                       fontSize: '11.5px',
                       fontWeight: 800,
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
-                      border: isCatActive ? '1.5px solid var(--sp-accent)' : '1px solid var(--sp-border)',
-                      background: isCatActive ? 'var(--sp-accent)' : 'var(--sp-card)',
+                      border: isCatActive ? '1.5px solid #4f46e5' : '1px solid var(--sp-border)',
+                      background: isCatActive ? '#4f46e5' : 'var(--sp-card)',
                       color: isCatActive ? '#fff' : 'var(--sp-text)',
-                      boxShadow: isCatActive ? '0 2px 8px var(--sp-glow)' : 'none',
+                      boxShadow: isCatActive ? '0 2px 8px rgba(79, 70, 229, 0.35)' : 'none',
                       transition: 'all 0.15s ease',
                       display: 'flex',
                       alignItems: 'center',
@@ -928,12 +930,12 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                   >
                     <span>{catName}</span>
                     <span style={{
-                      padding: '1px 6px',
-                      borderRadius: '99px',
+                      padding: '2px 7px',
+                      borderRadius: '9999px',
                       fontSize: '10px',
-                      fontWeight: 900,
-                      background: isCatActive ? 'rgba(255,255,255,0.25)' : 'rgba(99,102,241,0.12)',
-                      color: isCatActive ? '#fff' : 'var(--sp-accent)',
+                      fontWeight: 800,
+                      background: isCatActive ? 'rgba(255,255,255,0.25)' : '#f1f5f9',
+                      color: isCatActive ? '#fff' : '#64748b',
                     }}>
                       {catCount}
                     </span>
@@ -1417,6 +1419,10 @@ export default function ShopsPage({ defaultTab = 'all' }) {
                       radiusKm={radiusKm}
                       selectedId={selectedBusinessId}
                       onMarkerSelect={(id) => setSelectedBusinessId(id)}
+                      totalWithoutWebsites={withoutWebsites}
+                      totalWithWebsites={withWebsites}
+                      locationName={locationName}
+                      onSelectVisible={() => setShowBroadcastModal(true)}
                     />
                   </div>
                 </div>
@@ -1629,7 +1635,31 @@ export default function ShopsPage({ defaultTab = 'all' }) {
         }}
       />
 
-      <Footer />
+      {/* Clean minimal footer matching design */}
+      <footer style={{
+        borderTop: '1px solid var(--sp-border)',
+        background: '#ffffff',
+        padding: '16px 32px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px',
+        fontSize: '11px',
+        color: '#64748b',
+        marginTop: '20px',
+        position: 'relative',
+        zIndex: 10,
+      }}>
+        <div>
+          © 2025 Website Presence Detection Platform. Real-time Lead Prospecting Engine.
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', fontWeight: 600 }}>
+          <a href="/docs" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>Documentation</a>
+          <a href="/api/health" target="_blank" rel="noopener noreferrer" style={{ color: '#475569', textDecoration: 'none' }}>API Access</a>
+          <span style={{ color: '#475569', cursor: 'pointer' }}>Privacy Policy</span>
+        </div>
+      </footer>
       <MobileBottomNav />
     </div>
   );

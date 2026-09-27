@@ -10,10 +10,10 @@ import api from '../services/api';
 import { calculateDistance } from '../services/distanceService';
 import { getCurrentGpsPosition, getIpFallbackPosition, reverseGeocodeCoords } from '../services/locationService';
 
-/** Default location (Rajampet, Annamayya District) */
-const DEFAULT_LAT = 14.1936;
-const DEFAULT_LNG = 79.1586;
-const DEFAULT_NAME = 'Rajampet';
+/** Default location (HITEC City, Hyderabad) */
+const DEFAULT_LAT = 17.4485;
+const DEFAULT_LNG = 78.3895;
+const DEFAULT_NAME = 'HITEC City, Hyderabad';
 
 function makeGpsCenter(latitude, longitude, accuracy = null, isDefault = false, name = null, formattedAddress = '') {
   return {
@@ -23,9 +23,9 @@ function makeGpsCenter(latitude, longitude, accuracy = null, isDefault = false, 
     accuracy,
     isDefaultFallback: isDefault,
     name: name || (isDefault ? DEFAULT_NAME : 'Your Live GPS Location'),
-    formattedAddress: formattedAddress || (isDefault ? 'Rajampet, Annamayya District, Andhra Pradesh, India' : ''),
-    shortAddress: isDefault ? 'Rajampet' : '',
-    placeId: isDefault ? 'loc_ap_rajampet' : null,
+    formattedAddress: formattedAddress || (isDefault ? 'HITEC City, Hyderabad, Telangana, India' : ''),
+    shortAddress: isDefault ? 'HITEC City, Hyderabad' : '',
+    placeId: isDefault ? 'loc_hyd_hiteccity' : null,
     googleMapsUri: null,
   };
 }
@@ -58,7 +58,7 @@ export const useShopStore = create((set, get) => ({
   },
 
   // ─── Search Filters ────────────────────────────────────────────────────────
-  radiusKm: 10.0,
+  radiusKm: 2.0,
   category: '',
   keyword: '',
 
