@@ -221,12 +221,13 @@ def _get_db_real_places(
     # 2. Query SQLite shop.db
     db_candidates = [
         "/tmp/shop.db",
-        os.path.join(os.getcwd(), "shop.db"),
         os.path.join(os.getcwd(), "backend", "shop.db"),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "shop.db"),
+        os.path.join(os.getcwd(), "shop.db"),
         os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "backend", "shop.db"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "shop.db"),
     ]
-    db_path = next((p for p in db_candidates if os.path.exists(p)), "shop.db")
+    existing_dbs = [p for p in db_candidates if os.path.isfile(p)]
+    db_path = max(existing_dbs, key=os.path.getsize) if existing_dbs else "shop.db"
 
     try:
         conn = sqlite3.connect(db_path, timeout=3.0)

@@ -17,9 +17,9 @@ def _resolve_db_path() -> str:
         Path("/app/shop.db"),
         Path("/tmp/shop.db"),
     ]
-    for c in candidates:
-        if c.is_file():
-            return c.as_posix()
+    existing = [c for c in candidates if c.is_file()]
+    if existing:
+        return max(existing, key=lambda p: p.stat().st_size).as_posix()
     return (backend_dir / "shop.db").as_posix()
 
 _DB_PATH = _resolve_db_path()
