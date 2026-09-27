@@ -160,14 +160,6 @@ export default function Navbar() {
             {/* Authentication Buttons & Profile Menu */}
             {isAuthenticated ? (
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                <button
-                  onClick={() => handleNavigate('/dashboard')}
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-full transition-all border border-blue-200 dark:border-blue-900/60"
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5" />
-                  <span>Dashboard</span>
-                </button>
-
                 <div className="relative" ref={loginDropdownRef}>
                   <button
                     onClick={() => setLoginDropdownOpen(!loginDropdownOpen)}
