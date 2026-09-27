@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, MessageCircle, ExternalLink, Layers, Download, CheckSquare } from 'lucide-react';
+import { Navigation, MapPin, MessageCircle, ExternalLink, Layers } from 'lucide-react';
 import { formatDistance } from '../../services/distanceService';
 import { getGoogleMapsUrl, getGoogleMapsDirectionsUrl } from '../../services/locationService';
 import { getWhatsAppUrl, launchWhatsAppApp } from '../../services/whatsappService';
@@ -99,8 +99,6 @@ export function BusinessMap({
   radiusKm = 5,
   selectedId = null,
   onMarkerSelect = () => {},
-  onSelectVisible = null,
-  onExportLeads = null,
   totalWithoutWebsites = null,
   totalWithWebsites = null,
   locationName = '',
@@ -114,40 +112,6 @@ export function BusinessMap({
   const withWebsitesCount = totalWithWebsites != null
     ? totalWithWebsites
     : businesses.filter(b => b.website_status === 'WEBSITE_AVAILABLE').length;
-
-  const potentialAgencyValue = withoutWebsitesCount > 0
-    ? (withoutWebsitesCount >= 500 ? '150,000' : (withoutWebsitesCount * 280).toLocaleString('en-US'))
-    : '0';
-
-  const handleExportCsv = () => {
-    if (onExportLeads) {
-      onExportLeads();
-      return;
-    }
-    const headers = ["ID", "Name", "Category", "Phone", "Address", "Website Status", "Website URL", "Rating", "Review Count", "Distance (km)", "Google Maps URL"];
-    const rows = businesses.map(b => [
-      b.id,
-      `"${(b.name || '').replace(/"/g, '""')}"`,
-      `"${(b.category || '').replace(/"/g, '""')}"`,
-      `"${(b.phone || '').replace(/"/g, '""')}"`,
-      `"${(b.address || '').replace(/"/g, '""')}"`,
-      `"${b.website_status || 'UNKNOWN'}"`,
-      `"${(b.website_url || '').replace(/"/g, '""')}"`,
-      b.rating || '',
-      b.review_count || '',
-      b.distance_km != null ? b.distance_km : '',
-      `"${(b.google_maps_uri || '').replace(/"/g, '""')}"`
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    const cleanLoc = (locationName || 'area').replace(/[^a-zA-Z0-9]/g, '_');
-    link.setAttribute("download", `leads_${cleanLoc}_${radiusKm}km.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const calculateZoom = (r) => {
     if (r <= 0.5) return 16;
@@ -380,88 +344,6 @@ export function BusinessMap({
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />
             <span>Your Location (GPS)</span>
           </div>
-        </div>
-      </div>
-
-      {/* Live Radius & Agency Value Overlay Card (Bottom Center) */}
-      <div style={{
-        position: 'absolute',
-        bottom: 14,
-        left: 14,
-        right: 14,
-        zIndex: 1000,
-        background: 'rgba(255, 255, 255, 0.96)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid #e2e8f0',
-        borderRadius: '16px',
-        padding: '12px 16px',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        pointerEvents: 'auto',
-      }}>
-        {/* Status text row */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-            <span>Live Radius: {Number(radiusKm).toFixed(1)} km Perimeter Active</span>
-          </div>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', marginTop: '2px' }}>
-            <strong style={{ color: '#0f172a' }}>{withoutWebsitesCount} Unclaimed/Missing Websites</strong> • Potential Agency Value: <strong style={{ color: '#0f172a' }}>~${potentialAgencyValue}</strong>
-          </div>
-        </div>
-
-        {/* Buttons row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            type="button"
-            onClick={onSelectVisible}
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              border: '1.5px solid #cbd5e1',
-              background: '#ffffff',
-              color: '#1e293b',
-              fontSize: '11.5px',
-              fontWeight: 800,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <CheckSquare style={{ width: 13, height: 13, color: '#6366f1' }} />
-            <span>Select Visible ({businesses.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              border: 'none',
-              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-              color: '#ffffff',
-              fontSize: '11.5px',
-              fontWeight: 800,
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(99, 102, 241, 0.35)',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <Download style={{ width: 13, height: 13 }} />
-            <span>Export Leads (.CSV)</span>
-          </button>
         </div>
       </div>
     </div>
