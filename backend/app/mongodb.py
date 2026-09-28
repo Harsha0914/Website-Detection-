@@ -33,15 +33,21 @@ def get_mongo_client() -> Optional[pymongo.MongoClient]:
         return None
 
     try:
-        client = pymongo.MongoClient(
-            uri,
-            serverSelectionTimeoutMS=4000,
-            connectTimeoutMS=4000,
-            socketTimeoutMS=5000,
-            maxPoolSize=20,
-            minPoolSize=1,
-            retryWrites=True,
-        )
+        kwargs = {
+            "serverSelectionTimeoutMS": 4000,
+            "connectTimeoutMS": 4000,
+            "socketTimeoutMS": 5000,
+            "maxPoolSize": 20,
+            "minPoolSize": 1,
+            "retryWrites": True,
+        }
+        try:
+            import certifi
+            kwargs["tlsCAFile"] = certifi.where()
+        except Exception:
+            pass
+
+        client = pymongo.MongoClient(uri, **kwargs)
         # Test connection
         client.admin.command("ping")
         _mongo_client = client
