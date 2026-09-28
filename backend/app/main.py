@@ -145,5 +145,20 @@ def root():
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy"}
+    from app.mongodb import get_mongo_status
+    mongo_stat = get_mongo_status()
+    return {
+        "status": "healthy",
+        "database": "sqlite" if str(engine.url).startswith("sqlite") else "postgres",
+        "mongodb": {
+            "status": "connected" if mongo_stat.get("connected") else "disconnected",
+            "database": mongo_stat.get("database"),
+            "counts": mongo_stat.get("counts", {}),
+        }
+    }
+
+@app.get("/api/health/mongodb")
+def mongodb_health():
+    from app.mongodb import get_mongo_status
+    return get_mongo_status()
 

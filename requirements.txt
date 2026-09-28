@@ -17,3 +17,5 @@ pydantic-settings==2.2.1
 slowapi==0.1.9
 google-generativeai==0.5.4
 anyio==4.3.0
+pymongo>=4.6.0
+dnspython>=2.6.0

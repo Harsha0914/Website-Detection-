@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.environ.get("DATABASE_URL") or f"sqlite:///{_DB_PATH}"
 
+    # MongoDB
+    MONGODB_URI: str = os.environ.get("MONGODB_URI") or "mongodb+srv://harshavardhan_db_user:lhLFCsQF3TZgLbcv@cluster0.d65tyux.mongodb.net/shop_presence?appName=Cluster0&compressors=zlib"
+    MONGODB_DB_NAME: str = os.environ.get("MONGODB_DB_NAME") or "shop_presence"
+
     # Admin Registration Secret Code
     ADMIN_SECRET_CODE: str = "ADMIN2026"
 

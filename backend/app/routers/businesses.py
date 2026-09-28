@@ -293,6 +293,34 @@ def get_nearby_businesses(
     if db_changed:
         db.flush()   # Assign auto-increment IDs before background tasks reference biz.id
         db.commit()
+        try:
+            from app.mongodb import upsert_businesses_batch
+            mongo_items = [
+                {
+                    "id": b.id,
+                    "external_place_id": b.external_place_id,
+                    "name": b.name,
+                    "category": b.category,
+                    "address": b.address,
+                    "short_address": getattr(b, "short_address", None),
+                    "google_maps_uri": getattr(b, "google_maps_uri", None),
+                    "latitude": b.latitude,
+                    "longitude": b.longitude,
+                    "phone": b.phone,
+                    "website_url": b.website_url,
+                    "rating": b.rating,
+                    "review_count": b.review_count,
+                    "business_status": b.business_status,
+                    "opening_hours": b.opening_hours,
+                    "website_status": str(b.website_status),
+                    "website_quality": str(b.website_quality),
+                    "photo_url": getattr(b, "photo_url", None),
+                }
+                for b in existing_biz_map.values()
+            ]
+            background_tasks.add_task(upsert_businesses_batch, mongo_items)
+        except Exception as e:
+            print(f"MongoDB background sync queue note: {e}")
 
     for biz, w_url in new_website_syncs:
         if biz.id:
