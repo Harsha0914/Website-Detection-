@@ -13,6 +13,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import GoogleSignInButton from '../../components/auth/GoogleSignInButton';
 
 export default function RegisterPage() {
   const { register, loading, error } = useAuthStore();
@@ -329,6 +330,14 @@ export default function RegisterPage() {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+
+          {/* Continue with Google matching Image 3 */}
+          <GoogleSignInButton
+            role={role}
+            defaultEmail={formData.email || (formData.username.includes('@') ? formData.username : '')}
+            defaultName={formData.full_name}
+            dividerPosition="top"
+          />
 
           {/* Login prompt */}
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">

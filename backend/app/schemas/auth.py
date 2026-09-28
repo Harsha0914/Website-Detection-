@@ -114,3 +114,11 @@ class VerifyOtpResetPasswordRequest(BaseModel):
         return v
 
 
+class GoogleAuthRequest(BaseModel):
+    email: EmailStr
+    full_name: str | None = None
+    sub: str | None = None
+    role: str = "USER"
+
+
+

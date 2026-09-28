@@ -12,6 +12,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     SendOtpRequest,
     VerifyOtpResetPasswordRequest,
+    GoogleAuthRequest,
 )
 from app.schemas.user import UserOut
 from app.utils.security import hash_password, verify_password
@@ -19,6 +20,8 @@ from app.services.email_service import generate_otp, store_otp, verify_otp, send
 from app.auth.jwt import create_access_token, create_refresh_token, decode_token
 from app.auth.dependencies import get_current_user
 from jose import JWTError
+import uuid
+
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -276,3 +279,55 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/logout")
 def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Logged out successfully"}
+
+
+@router.post("/google", response_model=TokenResponse)
+def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
+    email_clean = req.email.lower().strip()
+    if not email_clean:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google email is required."
+        )
+
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        name_part = (req.full_name or "").strip()
+        if not name_part:
+            name_part = email_clean.split("@")[0].replace(".", " ").replace("_", " ").title()
+        
+        user_role = UserRole.ADMIN if (req.role and req.role.upper() == "ADMIN") else UserRole.USER
+        base_username = email_clean.split("@")[0].lower()
+        existing_username = db.query(User).filter(User.username == base_username).first()
+        unique_username = base_username if not existing_username else f"{base_username}_{uuid.uuid4().hex[:4]}"
+
+        user = User(
+            username=unique_username,
+            full_name=name_part if len(name_part) >= 2 else "Google User",
+            email=email_clean,
+            phone="",
+            password_hash=hash_password(f"GoogleAuth_{uuid.uuid4().hex}"),
+            role=user_role,
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        if not user.is_active:
+            user.is_active = True
+            db.commit()
+
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        user_id=user.id,
+        role=user.role.value,
+        full_name=user.full_name,
+        username=user.username or user.email
+    )
+

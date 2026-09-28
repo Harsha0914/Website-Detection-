@@ -112,7 +112,55 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  googleAuth: async ({ email, full_name, role = 'USER' }) => {
+    set({ loading: true, error: null });
+    try {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const res = await api.post('/auth/google', {
+        email: cleanEmail,
+        full_name: full_name || cleanEmail.split('@')[0],
+        role,
+      });
+      const data = res.data;
+      const { access_token, refresh_token, role: userRole, full_name: name, user_id, username } = data;
+      const userInfo = { id: user_id, username: username || cleanEmail, email: cleanEmail, full_name: name, role: userRole };
+
+      try {
+        localStorage.setItem('access_token', access_token);
+        if (refresh_token) {
+          localStorage.setItem('refresh_token', refresh_token);
+        }
+        localStorage.setItem('user_info', JSON.stringify(userInfo));
+      } catch (storageErr) {
+        console.warn('LocalStorage write warning:', storageErr);
+      }
+
+      set({
+        user: userInfo,
+        accessToken: access_token,
+        isAuthenticated: true,
+        loading: false,
+        error: null,
+      });
+
+      return userInfo;
+    } catch (err) {
+      let msg = 'Google authentication failed. Please try again.';
+      const detail = err.response?.data?.detail;
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail)) {
+        msg = detail.map((d) => d.msg || d.message || JSON.stringify(d)).join(', ');
+      } else if (detail) {
+        msg = JSON.stringify(detail);
+      }
+      set({ loading: false, error: msg });
+      throw new Error(msg);
+    }
+  },
+
   sendPasswordOtp: async (email) => {
+
     try {
       const cleanEmail = (email || '').trim().toLowerCase();
       const res = await api.post('/auth/send-otp', { email: cleanEmail });
