@@ -252,3 +252,54 @@ def find_nearby_businesses(
     except Exception as e:
         logger.warning(f"MongoDB geospatial search failed: {e}")
         return []
+
+
+def upsert_user(user_dict: Dict[str, Any]) -> bool:
+    """Upserts a user into the MongoDB users collection."""
+    try:
+        db = get_mongo_db()
+        if db is None:
+            return False
+
+        doc = dict(user_dict)
+        email = (doc.get("email") or "").lower().strip()
+        username = (doc.get("username") or "").lower().strip()
+        if not email and not username:
+            return False
+
+        # Build filter query
+        if email and username:
+            filter_query = {"$or": [{"email": email}, {"username": username}]}
+        elif email:
+            filter_query = {"email": email}
+        else:
+            filter_query = {"username": username}
+
+        doc["email"] = email
+        if username:
+            doc["username"] = username
+
+        db.users.update_one(filter_query, {"$set": doc}, upsert=True)
+        logger.info(f"User {email or username} successfully synced to MongoDB Atlas users collection!")
+        return True
+    except Exception as e:
+        logger.warning(f"Error upserting user to MongoDB: {e}")
+        return False
+
+
+def find_user_by_email_or_username(identifier: str) -> Optional[Dict[str, Any]]:
+    """Finds a user from MongoDB users collection by email or username."""
+    try:
+        db = get_mongo_db()
+        if db is None or not identifier:
+            return None
+
+        clean_id = identifier.lower().strip()
+        user_doc = db.users.find_one(
+            {"$or": [{"email": clean_id}, {"username": clean_id}]},
+            {"_id": 0}
+        )
+        return user_doc
+    except Exception as e:
+        logger.warning(f"Error finding user in MongoDB: {e}")
+        return None

@@ -182,6 +182,25 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    # Immediately sync new user to MongoDB Atlas
+    try:
+        from app.mongodb import upsert_user
+        upsert_user({
+            "id": new_user.id,
+            "username": new_user.username,
+            "full_name": new_user.full_name,
+            "email": new_user.email,
+            "phone": new_user.phone or "",
+            "password_hash": new_user.password_hash,
+            "role": new_user.role.value if hasattr(new_user.role, 'value') else str(new_user.role),
+            "is_active": new_user.is_active,
+            "created_at": str(new_user.created_at) if new_user.created_at else None,
+            "updated_at": str(new_user.updated_at) if hasattr(new_user, 'updated_at') and new_user.updated_at else None,
+        })
+    except Exception as e:
+        print(f"MongoDB user register sync warning: {e}")
+
     return new_user
 
 
@@ -199,10 +218,32 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             detail="Password is required."
         )
 
-    # Find account by username OR email
+    # Find account by username OR email in local DB
     user = db.query(User).filter(
         (User.email == identifier) | (User.username == identifier)
     ).first()
+
+    # Fallback to MongoDB Atlas if not in local DB (e.g. serverless instance)
+    if not user:
+        try:
+            from app.mongodb import find_user_by_email_or_username
+            m_user = find_user_by_email_or_username(identifier)
+            if m_user:
+                role_val = UserRole.ADMIN if str(m_user.get("role")).upper() == "ADMIN" else UserRole.USER
+                user = User(
+                    username=m_user.get("username") or identifier,
+                    email=m_user.get("email") or identifier,
+                    full_name=m_user.get("full_name") or identifier,
+                    phone=m_user.get("phone") or "",
+                    password_hash=m_user.get("password_hash"),
+                    role=role_val,
+                    is_active=m_user.get("is_active", True),
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+        except Exception as e:
+            print(f"MongoDB user login lookup error: {e}")
 
     if not user:
         raise HTTPException(
@@ -317,6 +358,23 @@ def google_auth(req: GoogleAuthRequest, db: Session = Depends(get_db)):
         if not user.is_active:
             user.is_active = True
             db.commit()
+
+    try:
+        from app.mongodb import upsert_user
+        upsert_user({
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "email": user.email,
+            "phone": user.phone or "",
+            "password_hash": user.password_hash,
+            "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+            "is_active": user.is_active,
+            "created_at": str(user.created_at) if user.created_at else None,
+            "updated_at": str(user.updated_at) if hasattr(user, 'updated_at') and user.updated_at else None,
+        })
+    except Exception as e:
+        print(f"MongoDB google auth sync note: {e}")
 
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id)

@@ -134,6 +134,22 @@ def update_user_status(
         user.role = req.role
     db.commit()
     db.refresh(user)
+
+    try:
+        from app.mongodb import upsert_user
+        upsert_user({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": user.phone or "",
+            "password_hash": user.password_hash,
+            "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+            "is_active": user.is_active,
+        })
+    except Exception as e:
+        print(f"MongoDB admin user update sync note: {e}")
+
     return user
 
 @router.delete("/users/{user_id}")
@@ -141,8 +157,18 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    user_email = user.email
     db.delete(user)
     db.commit()
+
+    try:
+        from app.mongodb import get_mongo_db
+        m_db = get_mongo_db()
+        if m_db is not None:
+            m_db.users.delete_one({"$or": [{"id": user_id}, {"email": user_email}]})
+    except Exception as e:
+        print(f"MongoDB user delete note: {e}")
+
     return {"message": "User deleted successfully"}
 
 # ─── Website Requests Management ──────────────────────────────────────────────

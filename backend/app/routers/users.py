@@ -26,4 +26,21 @@ def update_profile(
 
     db.commit()
     db.refresh(current_user)
+
+    try:
+        from app.mongodb import upsert_user
+        upsert_user({
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "phone": current_user.phone or "",
+            "password_hash": current_user.password_hash,
+            "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
+            "is_active": current_user.is_active,
+            "updated_at": str(current_user.updated_at) if hasattr(current_user, 'updated_at') and current_user.updated_at else None,
+        })
+    except Exception as e:
+        print(f"MongoDB profile update sync note: {e}")
+
     return current_user
