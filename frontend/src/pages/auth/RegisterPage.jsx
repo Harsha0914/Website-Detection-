@@ -34,6 +34,9 @@ export default function RegisterPage() {
 
   const [validationError, setValidationError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+
 
   useEffect(() => {
     if (searchParams.get('role') === 'admin') {
@@ -85,6 +88,11 @@ export default function RegisterPage() {
     }
     if (formData.password !== formData.confirm_password) {
       setValidationError('Passwords do not match.');
+      return;
+    }
+
+    if (!agreeTerms) {
+      setValidationError('Please agree with the terms and conditions to create an account.');
       return;
     }
 
@@ -317,6 +325,38 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            {/* I agree with these terms - only for register page */}
+            <div className="flex items-start gap-2.5 pt-1.5 pb-1">
+              <input
+                id="agree_terms"
+                name="agree_terms"
+                type="checkbox"
+                required
+                checked={agreeTerms}
+                onChange={(e) => {
+                  setAgreeTerms(e.target.checked);
+                  if (validationError.toLowerCase().includes('terms')) {
+                    setValidationError('');
+                  }
+                }}
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500/20 cursor-pointer accent-blue-600 shrink-0"
+              />
+              <label
+                htmlFor="agree_terms"
+                className="text-xs text-slate-600 dark:text-slate-400 select-none cursor-pointer leading-tight"
+              >
+                I agree with these{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="font-bold text-blue-600 dark:text-blue-400 hover:underline inline cursor-pointer"
+                >
+                  Terms & Conditions
+                </button>{' '}
+                and Privacy Policy
+              </label>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -359,6 +399,59 @@ export default function RegisterPage() {
           </Link>
         </div>
       </div>
+
+      {/* Terms & Conditions Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Terms & Conditions</h3>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="text-xs text-slate-600 dark:text-slate-300 space-y-3 leading-relaxed">
+              <p>
+                Welcome to <strong>Website Presence Detection</strong>. By registering an account, you agree to:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-slate-500 dark:text-slate-400">
+                <li>Provide accurate account information and keep your credentials secure.</li>
+                <li>Use location searches and business contact tools responsibly in accordance with applicable laws.</li>
+                <li>Respect privacy rights when sending inquiries, WhatsApp messages, or website evaluation requests.</li>
+                <li>Protect sensitive data and comply with local business regulations.</li>
+              </ul>
+              <p>
+                We do not share your private account data with unauthorized third parties. For full policy details, contact support.
+              </p>
+            </div>
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="py-2 px-4 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAgreeTerms(true);
+                  if (validationError.toLowerCase().includes('terms')) setValidationError('');
+                  setShowTermsModal(false);
+                }}
+                className="py-2 px-4 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs"
+              >
+                I Agree
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
