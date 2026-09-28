@@ -9,6 +9,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 _mongo_client: Optional[pymongo.MongoClient] = None
+_last_mongo_error: Optional[str] = None
 
 
 def get_mongo_client() -> Optional[pymongo.MongoClient]:
@@ -16,35 +17,39 @@ def get_mongo_client() -> Optional[pymongo.MongoClient]:
     Returns a cached MongoClient instance.
     Uses MONGODB_URI from settings/environment with connection pooling and timeouts.
     """
-    global _mongo_client
+    global _mongo_client, _last_mongo_error
     if _mongo_client is not None:
         try:
             # Check if active
             _mongo_client.admin.command("ping")
             return _mongo_client
-        except Exception:
+        except Exception as ping_err:
+            _last_mongo_error = f"Ping failed: {ping_err}"
             _mongo_client = None
 
     uri = os.environ.get("MONGODB_URI") or settings.MONGODB_URI
     if not uri or "mongodb" not in uri:
+        _last_mongo_error = "MONGODB_URI is empty or invalid"
         return None
 
     try:
         client = pymongo.MongoClient(
             uri,
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=5000,
-            socketTimeoutMS=10000,
-            maxPoolSize=50,
-            minPoolSize=2,
+            serverSelectionTimeoutMS=4000,
+            connectTimeoutMS=4000,
+            socketTimeoutMS=5000,
+            maxPoolSize=20,
+            minPoolSize=1,
             retryWrites=True,
         )
         # Test connection
         client.admin.command("ping")
         _mongo_client = client
+        _last_mongo_error = None
         logger.info("Successfully established connection to MongoDB Atlas!")
         return _mongo_client
     except Exception as e:
+        _last_mongo_error = str(e)
         logger.warning(f"Failed to connect to MongoDB: {e}")
         return None
 
@@ -72,10 +77,11 @@ def ping_mongodb() -> bool:
 
 def get_mongo_status() -> Dict[str, Any]:
     """Returns detailed status information about the MongoDB connection."""
+    global _last_mongo_error
     try:
         client = get_mongo_client()
         if not client:
-            return {"connected": False, "error": "Could not establish connection to MongoDB"}
+            return {"connected": False, "error": _last_mongo_error or "Could not establish connection to MongoDB"}
         
         db = get_mongo_db()
         db_name = db.name if db is not None else "unknown"
