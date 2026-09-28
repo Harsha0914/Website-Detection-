@@ -1268,11 +1268,12 @@ class GooglePlacesProvider(PlacesProvider):
         canonical_category, allowed_types = resolve_category(category)
 
         # ── FAST PATH: Check verified regional data FIRST ─────────────────────
-        # For known Indian cities with pre-verified data, return instantly
-        # without hitting Google API (which adds 3-9s latency and may fail)
+        # For known Indian cities with complete pre-verified datasets (e.g. Hyderabad with 700+ shops),
+        # return instantly. For smaller towns or areas across India (e.g. Rayachoti, Kadapa, Chittoor, etc.),
+        # do NOT artificially cap at 5 shops: query Google Places API live to discover dozens/hundreds of real shops!
         _fast_cat = canonical_category or (category.strip() if category else None)
         _fast_db = _get_db_real_places(latitude, longitude, radius_km, _fast_cat, keyword)
-        min_required = 1 if _fast_cat else 5
+        min_required = 60 if _fast_cat else 150
         if len(_fast_db) >= min_required:
             now = time.time()
             fast_debug = SearchDebugInfo(
@@ -1328,23 +1329,25 @@ class GooglePlacesProvider(PlacesProvider):
             }
 
             if keyword and keyword.strip():
-                text_queries = [f"{keyword.strip()} {canonical_category or ''}".strip()]
+                text_queries = [f"{keyword.strip()} {canonical_category or ''}".strip(), f"{keyword.strip()} shops in this area"]
             elif category and category.strip() and category.strip() not in ("All Categories", "All Shops"):
-                text_queries = [f"{category.strip()} in this area"]
+                text_queries = [f"{category.strip()} in this area", f"{category.strip()} near me"]
             else:
                 text_queries = [
-                    "shops and stores",
-                    "restaurants and food",
-                    "supermarkets and groceries",
+                    "shops and stores in this area",
+                    "restaurants and food in this area",
+                    "supermarkets and groceries in this area",
+                    "clothing and textiles in this area",
                 ]
 
             found_places = []
             try:
-                with httpx.Client(timeout=4.5) as client:
+                with httpx.Client(timeout=5.0) as client:
                     # 1. Official Google Places API searchNearby with exact Circular radius
-                    if not keyword:
+                    if allowed_types:
+                        # Specific category requested (e.g. restaurant, pharmacy)
                         nearby_payload = {
-                            "includedTypes": allowed_types if allowed_types else ["store", "restaurant", "supermarket", "grocery_store", "pharmacy", "clothing_store", "electronics_store", "bakery", "beauty_salon"],
+                            "includedTypes": allowed_types,
                             "maxResultCount": 20,
                             "locationRestriction": {
                                 "circle": {
@@ -1363,9 +1366,35 @@ class GooglePlacesProvider(PlacesProvider):
                                 GooglePlacesProvider._quota_exhausted_until = time.time() + 3600.0
                         except Exception:
                             pass
+                    elif not keyword:
+                        # All Categories: query commercial sector batches to discover dozens of real shops!
+                        for batch in ALL_COMMERCIAL_CATEGORIES_BATCHES[:5]:
+                            if quota_hit:
+                                break
+                            nearby_payload = {
+                                "includedTypes": batch,
+                                "maxResultCount": 20,
+                                "locationRestriction": {
+                                    "circle": {
+                                        "center": {"latitude": o_lat, "longitude": o_lng},
+                                        "radius": min(50000.0, max(o_radius * 1000.0, 2000.0))
+                                    }
+                                }
+                            }
+                            try:
+                                n_resp = client.post(f"{self.BASE_URL}:searchNearby", json=nearby_payload, headers=headers)
+                                if n_resp.status_code == 200:
+                                    for p in n_resp.json().get("places", []):
+                                        found_places.append(p)
+                                elif n_resp.status_code in (429, 403):
+                                    quota_hit = True
+                                    GooglePlacesProvider._quota_exhausted_until = time.time() + 3600.0
+                                    break
+                            except Exception:
+                                pass
 
                     # 2. Text Search Query for broad keyword / category matching
-                    for tq in text_queries[:2]:
+                    for tq in text_queries[:3]:
                         if quota_hit:
                             break
                         t_payload = {
@@ -1387,6 +1416,7 @@ class GooglePlacesProvider(PlacesProvider):
             except Exception:
                 pass
             return found_places
+
 
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(origins))) as executor:
@@ -1433,7 +1463,22 @@ class GooglePlacesProvider(PlacesProvider):
                     p.distance_km = round(dist, 3)
                     valid_results.append(p)
 
-        sorted_results = sorted(valid_results, key=lambda x: x.distance_km or 0)
+        # Deduplicate places by normalized name and close proximity (within 120m)
+        deduped_results: list[PlaceData] = []
+        seen_keys: list[tuple[str, float, float]] = []
+        for p in sorted(valid_results, key=lambda x: x.distance_km or 0):
+            p_norm = re.sub(r"[^a-z0-9]", "", (p.name or "").lower())
+            is_dup = False
+            for s_norm, s_lat, s_lng in seen_keys:
+                if p_norm == s_norm and haversine_km(p.latitude, p.longitude, s_lat, s_lng) < 0.12:
+                    is_dup = True
+                    break
+            if not is_dup:
+                seen_keys.append((p_norm, p.latitude, p.longitude))
+                deduped_results.append(p)
+
+        sorted_results = deduped_results
+
 
         debug.error_message = None
         debug.error_type = None
