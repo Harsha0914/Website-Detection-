@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { X, Minus, Square, User, ArrowRight } from 'lucide-react';
+import { X, Key, Shield, ArrowRight, ExternalLink } from 'lucide-react';
 
 export function GoogleIcon({ className = 'w-5 h-5' }) {
   return (
@@ -28,96 +28,31 @@ export function GoogleIcon({ className = 'w-5 h-5' }) {
 
 export default function GoogleSignInButton({
   role = 'USER',
-  defaultEmail = '',
-  defaultName = '',
   onSuccess,
   showDivider = true,
   dividerPosition = 'top',
 }) {
   const navigate = useNavigate();
   const { googleAuth } = useAuthStore();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [loadingEmail, setLoadingEmail] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isCustomMode, setIsCustomMode] = useState(false);
-  const [customEmail, setCustomEmail] = useState('');
-  const [customName, setCustomName] = useState('');
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [clientIdInput, setClientIdInput] = useState(
+    localStorage.getItem('google_client_id') || import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+  );
 
-  // The exact laptop accounts from Image 1
-  const accounts = [
-    {
-      id: 'harsha',
-      name: 'Harshavardhanreddy Chevvu',
-      email: 'chevvuharshavardhanreddy@gmail.com',
-      avatarBg: 'bg-[#0f5132]',
-      initials: 'H',
-      isSunflower: false,
-    },
-    {
-      id: 'sujitha',
-      name: 'Sujitha Chevvu',
-      email: 'sujithachevvu14@gmail.com',
-      avatarBg: 'bg-[#b0003a]',
-      initials: 'S',
-      isSunflower: false,
-    },
-    {
-      id: 'asin',
-      name: 'Asin Shaik',
-      email: 'asinshaik45@gmail.com',
-      avatarBg: 'bg-amber-600',
-      initials: 'A',
-      isSunflower: true,
-    },
-  ];
-
-  const handleOpenPrompt = () => {
-    setError('');
-    setIsCustomMode(false);
-
-    // If client ID is present in environment, check if native Google popup can be triggered
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || localStorage.getItem('google_client_id');
-    if (clientId && window.google?.accounts?.oauth2) {
-      try {
-        const client = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'openid email profile',
-          prompt: 'select_account',
-          callback: async (tokenResponse) => {
-            if (tokenResponse?.access_token) {
-              setLoadingEmail('loading');
-              try {
-                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-                });
-                const googleProfile = await res.json();
-                if (googleProfile?.email) {
-                  await handleSelectAccount(googleProfile.email, googleProfile.name);
-                }
-              } catch (err) {
-                setError('Failed to fetch profile: ' + (err?.message || 'Error'));
-              } finally {
-                setLoadingEmail('');
-              }
-            }
-          },
-        });
-        client.requestAccessToken();
-        return;
-      } catch (err) {
-        console.warn('Google GSI error, opening account chooser:', err);
-      }
-    }
-
-    // Opens Google Account Chooser matching Image 1
-    setIsModalOpen(true);
+  const getActiveClientId = () => {
+    return (
+      (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim() ||
+      (localStorage.getItem('google_client_id') || '').trim()
+    );
   };
 
   const handleSelectAccount = async (email, name) => {
     const finalEmail = (email || '').trim().toLowerCase();
     if (!finalEmail) return;
 
-    setLoadingEmail(finalEmail);
+    setLoading(true);
     setError('');
 
     try {
@@ -128,7 +63,6 @@ export default function GoogleSignInButton({
         role: role || 'USER',
       });
 
-      setIsModalOpen(false);
       if (onSuccess) {
         onSuccess();
       } else {
@@ -136,8 +70,68 @@ export default function GoogleSignInButton({
       }
     } catch (err) {
       setError(err?.message || 'Failed to sign in with Google account.');
-      setLoadingEmail('');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const openGooglePopup = (clientIdToUse) => {
+    const clientId = clientIdToUse || getActiveClientId();
+    if (!clientId) {
+      setShowConfigModal(true);
+      return;
+    }
+
+    setError('');
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    const width = 500;
+    const height = 650;
+    const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+    const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+
+    const authUrl =
+      `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${encodeURIComponent(clientId)}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=token&` +
+      `scope=${encodeURIComponent('openid email profile')}&` +
+      `prompt=select_account`;
+
+    const popup = window.open(
+      authUrl,
+      'google_signin_popup',
+      `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,location=no,status=no,resizable=yes`
+    );
+
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      setError('Popup was blocked by your browser. Please allow popups for this site.');
+      return;
+    }
+
+    const messageHandler = async (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        window.removeEventListener('message', messageHandler);
+        const { email, name } = event.data;
+        await handleSelectAccount(email, name);
+      } else if (event.data?.type === 'GOOGLE_AUTH_ERROR') {
+        window.removeEventListener('message', messageHandler);
+        setError(event.data.error || 'Google sign-in was cancelled or encountered an error.');
+      }
+    };
+
+    window.addEventListener('message', messageHandler);
+  };
+
+  const handleSaveAndLaunch = () => {
+    const cleanId = (clientIdInput || '').trim();
+    if (!cleanId) {
+      setError('Please paste your Google OAuth Client ID.');
+      return;
+    }
+    localStorage.setItem('google_client_id', cleanId);
+    setShowConfigModal(false);
+    openGooglePopup(cleanId);
   };
 
   const renderDivider = () => (
@@ -152,13 +146,14 @@ export default function GoogleSignInButton({
   const renderButton = () => (
     <button
       type="button"
-      onClick={handleOpenPrompt}
-      className="w-full py-3.5 px-4 rounded-xl border-2 border-[#4285F4] hover:border-blue-600 bg-white dark:bg-slate-900 hover:bg-blue-50/50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-100 transition-all flex items-center justify-center gap-3 shadow-xs hover:shadow-md cursor-pointer group active:scale-[0.99]"
+      onClick={() => openGooglePopup()}
+      disabled={loading}
+      className="w-full py-3.5 px-4 rounded-xl border-2 border-[#4285F4] hover:border-blue-600 bg-white dark:bg-slate-900 hover:bg-blue-50/50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-100 transition-all flex items-center justify-center gap-3 shadow-xs hover:shadow-md cursor-pointer group active:scale-[0.99] disabled:opacity-60"
       title="Continue with Google"
     >
       <GoogleIcon className="w-5 h-5 shrink-0 group-hover:scale-105 transition-transform" />
       <span className="text-sm font-semibold tracking-normal text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-        Continue with Google
+        {loading ? 'Connecting Google...' : 'Continue with Google'}
       </span>
     </button>
   );
@@ -169,182 +164,90 @@ export default function GoogleSignInButton({
         {showDivider && dividerPosition === 'top' && renderDivider()}
         {renderButton()}
         {showDivider && dividerPosition === 'bottom' && renderDivider()}
+
+        {error && (
+          <div className="p-3 text-xs bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 rounded-xl font-medium">
+            {error}
+          </div>
+        )}
       </div>
 
-      {/* Real Google Account Chooser Window Matching Image 1 Exactly */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-[#131314] text-white rounded-2xl sm:rounded-3xl max-w-[440px] w-full shadow-2xl border border-[#3c4043] overflow-hidden flex flex-col animate-in zoom-in-95 duration-150 font-[Roboto,Inter,sans-serif]">
-            
-            {/* Chrome Window Title Bar (Matching Image 1) */}
-            <div className="bg-[#1e1f20] px-4 py-2 flex items-center justify-between border-b border-[#303134] select-none text-xs text-[#c4c7c5]">
-              <div className="flex items-center gap-2 min-w-0">
-                <GoogleIcon className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate font-medium text-[11.5px] text-[#e3e3e3]">
-                  Sign in – Google accounts - Google Chrome
-                </span>
+      {/* Google OAuth Client ID Input Modal (Shown if VITE_GOOGLE_CLIENT_ID not set yet) */}
+      {showConfigModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400">
+                  <Key className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+                    Google OAuth Client ID
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Required for Google to detect accounts on your laptop
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0 text-[#8e918f]">
-                <Minus className="w-3.5 h-3.5 cursor-pointer hover:text-white" onClick={() => setIsModalOpen(false)} />
-                <Square className="w-3 h-3 cursor-pointer hover:text-white" />
-                <X className="w-3.5 h-3.5 cursor-pointer hover:text-white" onClick={() => setIsModalOpen(false)} />
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Browser Address Bar (Matching Image 1) */}
-            <div className="bg-[#131314] px-4 py-1.5 border-b border-[#303134] flex items-center gap-2 text-[11px] text-[#9aa0a6] select-none">
-              <span className="w-4 h-4 rounded-full bg-[#28292a] flex items-center justify-center text-[10px] text-[#8ab4f8]">
-                🔒
-              </span>
-              <span className="truncate font-mono">
-                accounts.google.com/v3/signin/accountchooser?access_type=offline
-              </span>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              To open Google’s native <strong>accounts.google.com</strong> popup and detect the Google accounts signed into your laptop, paste your Google Cloud Client ID below:
+            </p>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Google Web Client ID
+              </label>
+              <input
+                type="text"
+                value={clientIdInput}
+                onChange={(e) => setClientIdInput(e.target.value)}
+                placeholder="xxxx-xxxxxxxx.apps.googleusercontent.com"
+                className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
+              />
             </div>
 
-            {/* Google Loading Bar Indicator when an account is selected */}
-            {loadingEmail && (
-              <div className="w-full h-1 bg-[#1e1f20] overflow-hidden">
-                <div className="w-full h-full bg-gradient-to-r from-blue-500 via-red-500 to-yellow-500 animate-pulse" />
-              </div>
-            )}
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="flex-1 py-2.5 px-3 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAndLaunch}
+                className="flex-1 py-2.5 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2"
+              >
+                <span>Launch Google Popup</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
 
-            {/* Main Window Content */}
-            <div className="p-6 sm:p-8 space-y-6">
-              
-              {/* Header: Choose an account */}
-              <div className="space-y-1">
-                <h2 className="text-2xl sm:text-[26px] font-normal tracking-tight text-white">
-                  Choose an account
-                </h2>
-                <p className="text-sm text-[#e3e3e3]">
-                  to continue to <span className="text-[#8ab4f8] font-medium">Website Presence Detection</span>
-                </p>
-              </div>
-
-              {error && (
-                <div className="p-3 text-xs bg-rose-950/60 border border-rose-800 text-rose-300 rounded-xl">
-                  {error}
-                </div>
-              )}
-
-              {/* Accounts List (Matching Image 1) */}
-              {!isCustomMode ? (
-                <div className="divide-y divide-[#3c4043] border-t border-b border-[#3c4043]">
-                  {accounts.map((acc) => (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      onClick={() => handleSelectAccount(acc.email, acc.name)}
-                      disabled={!!loadingEmail}
-                      className="w-full py-3.5 px-1 hover:bg-[#202124] transition-colors flex items-center gap-3.5 text-left group cursor-pointer disabled:opacity-50"
-                    >
-                      {/* Avatar */}
-                      {acc.isSunflower ? (
-                        <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 flex items-center justify-center text-sm shadow-xs shrink-0 border border-amber-300/40">
-                          🌻
-                        </div>
-                      ) : (
-                        <div
-                          className={`w-9 h-9 rounded-full ${acc.avatarBg} text-white font-medium text-sm flex items-center justify-center shrink-0 shadow-xs`}
-                        >
-                          {acc.initials}
-                        </div>
-                      )}
-
-                      {/* Name & Email */}
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[14.5px] font-medium text-[#f1f3f4] group-hover:text-white truncate">
-                          {acc.name}
-                        </div>
-                        <div className="text-[12.5px] text-[#9aa0a6] truncate font-normal">
-                          {acc.email}
-                        </div>
-                      </div>
-
-                      {loadingEmail === acc.email.toLowerCase() && (
-                        <div className="w-4 h-4 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin shrink-0" />
-                      )}
-                    </button>
-                  ))}
-
-                  {/* Use another account row */}
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomMode(true)}
-                    className="w-full py-3.5 px-1 hover:bg-[#202124] transition-colors flex items-center gap-3.5 text-left group cursor-pointer"
-                  >
-                    <div className="w-9 h-9 rounded-full border border-[#5f6368] flex items-center justify-center text-[#9aa0a6] group-hover:text-white shrink-0">
-                      <User className="w-5 h-5" />
-                    </div>
-                    <span className="text-[14.5px] font-medium text-[#f1f3f4] group-hover:text-white">
-                      Use another account
-                    </span>
-                  </button>
-                </div>
-              ) : (
-                /* Use another account inline input */
-                <div className="space-y-4 p-4 rounded-2xl bg-[#1e1f20] border border-[#3c4043]">
-                  <div className="text-sm font-medium text-white">Enter Google Account</div>
-                  <div>
-                    <input
-                      type="email"
-                      value={customEmail}
-                      onChange={(e) => setCustomEmail(e.target.value)}
-                      placeholder="Email or phone"
-                      autoFocus
-                      className="w-full px-3.5 py-2.5 text-sm bg-[#131314] border border-[#5f6368] focus:border-[#8ab4f8] rounded-xl text-white outline-none"
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={customName}
-                      onChange={(e) => setCustomName(e.target.value)}
-                      placeholder="Name (Optional)"
-                      className="w-full px-3.5 py-2.5 text-sm bg-[#131314] border border-[#5f6368] focus:border-[#8ab4f8] rounded-xl text-white outline-none"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomMode(false)}
-                      className="text-xs font-medium text-[#8ab4f8] hover:underline"
-                    >
-                      Back to accounts
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectAccount(customEmail, customName)}
-                      disabled={!customEmail || !!loadingEmail}
-                      className="py-2 px-5 text-xs font-semibold text-[#131314] bg-[#8ab4f8] hover:bg-[#a8c7fa] rounded-full transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                      <span>Next</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Footer text (Matching Image 1) */}
-              <div className="text-[12px] text-[#9aa0a6] leading-relaxed pt-2">
-                Before using this app, you can review Website Presence Detection’s{' '}
-                <a
-                  href="#privacy"
-                  onClick={(e) => e.preventDefault()}
-                  className="text-[#8ab4f8] hover:underline"
-                >
-                  Privacy Policy
-                </a>{' '}
-                and{' '}
-                <a
-                  href="#terms"
-                  onClick={(e) => e.preventDefault()}
-                  className="text-[#8ab4f8] hover:underline"
-                >
-                  Terms of Service
-                </a>
-                .
-              </div>
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Saved securely to your browser session</span>
+              </span>
+              <a
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-500 hover:underline flex items-center gap-1"
+              >
+                <span>Google Console</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </div>
           </div>
         </div>

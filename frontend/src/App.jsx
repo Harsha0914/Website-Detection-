@@ -5,6 +5,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import LoginPage from './pages/auth/LoginPage';
+import GoogleCallback from './pages/auth/GoogleCallback';
+
 
 // User pages
 import UserDashboard from './pages/dashboard/UserDashboard';
@@ -40,6 +42,8 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/google/callback" element={<GoogleCallback />} />
+
 
       {/* Normal User Protected Routes */}
       <Route
