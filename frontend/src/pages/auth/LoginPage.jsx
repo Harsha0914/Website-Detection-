@@ -4,7 +4,6 @@ import { Store, User, Mail, Lock, ArrowRight, ArrowLeft, AlertCircle, HelpCircle
 import { useAuthStore } from '../../store/authStore';
 import api, { getBaseUrl } from '../../services/api';
 import MobileBottomNav from '../../components/layout/MobileBottomNav';
-import GoogleSignInButton from '../../components/auth/GoogleSignInButton';
 
 export default function LoginPage() {
   const { login, resetPassword, loading, error, isAuthenticated, user } = useAuthStore();
@@ -245,13 +244,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Continue with Google matching Image 3 */}
-          <GoogleSignInButton
-            role="USER"
-            defaultEmail={username.includes('@') ? username : ''}
-            dividerPosition="top"
-          />
 
           {/* Registration Links */}
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center space-y-3">
