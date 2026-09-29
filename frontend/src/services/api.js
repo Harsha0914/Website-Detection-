@@ -70,8 +70,8 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Retry once on network error (handling Render cold boot)
-    if (!error.response && !originalRequest._networkRetry) {
+    // Retry once on network error (handling Render cold boot), but bypass for login to keep sign-in fast
+    if (!error.response && !originalRequest._networkRetry && !originalRequest.url?.includes('/auth/login')) {
       originalRequest._networkRetry = true;
       await new Promise((resolve) => setTimeout(resolve, 2000));
       return api(originalRequest);
@@ -103,7 +103,7 @@ api.interceptors.response.use(
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('user_info');
-          window.location.href = '/';
+          window.location.href = '/login';
         }
       } else {
         localStorage.removeItem('access_token');

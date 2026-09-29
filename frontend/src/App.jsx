@@ -28,7 +28,30 @@ import AdminReports from './pages/admin/AdminReports';
 
 import { useEffect } from 'react';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { useAuthStore } from './store/authStore';
 import api from './services/api';
+import WhatsAppSentConfirmToast from './components/common/WhatsAppSentConfirmToast';
+
+/**
+ * Root entry point handler:
+ * When users open localhost:5173 or the Vercel link directly:
+ * - If not authenticated: navigates directly to /login
+ * - If authenticated as ADMIN: navigates to /admin/dashboard
+ * - If authenticated as regular USER: navigates to /dashboard
+ */
+function RootRoute() {
+  const { isAuthenticated, user } = useAuthStore();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role === 'ADMIN') {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
+}
 
 export default function App() {
   useEffect(() => {
@@ -37,11 +60,13 @@ export default function App() {
   }, []);
 
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+    <>
+      <Routes>
+      {/* Root Route: Automatically directs to /login when opened, or /dashboard if logged in */}
+      <Route path="/" element={<RootRoute />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/landing" element={<LandingPage />} />
 
 
 
@@ -131,6 +156,8 @@ export default function App() {
       {/* Fallback Route */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    <WhatsAppSentConfirmToast />
+  </>
   );
 }
 

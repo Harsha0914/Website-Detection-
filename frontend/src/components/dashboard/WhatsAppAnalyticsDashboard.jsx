@@ -30,6 +30,7 @@ import {
 import {
   getWhatsAppStats,
   resetWhatsAppHistory,
+  deleteWhatsAppMessage,
   recordShopReply,
   getWhatsAppApiSettings,
   updateWhatsAppApiSettings,
@@ -104,6 +105,26 @@ export default function WhatsAppAnalyticsDashboard() {
       console.error('Failed to record reply:', err);
     } finally {
       setSubmittingReply(false);
+    }
+  };
+
+  const handleDeleteLog = async (logId, shopName) => {
+    if (!window.confirm(`Delete WhatsApp communication log for "${shopName}"?`)) return;
+    try {
+      await deleteWhatsAppMessage(logId);
+      await fetchStats();
+    } catch (err) {
+      console.error('Failed to delete log:', err);
+    }
+  };
+
+  const handleResetAllLogs = async () => {
+    if (!window.confirm('Are you sure you want to clear all recorded WhatsApp logs? This will remove all test messages and reset the message count to 0.')) return;
+    try {
+      await resetWhatsAppHistory();
+      await fetchStats();
+    } catch (err) {
+      console.error('Failed to reset logs:', err);
     }
   };
 
@@ -733,15 +754,28 @@ export default function WhatsAppAnalyticsDashboard() {
                   <Activity className="w-4 h-4 text-emerald-600" />
                   <span>Recent WhatsApp & AI Communications Log Stream</span>
                 </h3>
-                <a
-                  href="https://web.whatsapp.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
-                >
-                  <span>Open WhatsApp Web</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+                <div className="flex items-center gap-3">
+                  {(stats?.recent_activity || []).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleResetAllLogs}
+                      className="text-xs font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 flex items-center gap-1 cursor-pointer hover:underline"
+                      title="Clear all recorded WhatsApp logs"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Clear All Logs</span>
+                    </button>
+                  )}
+                  <a
+                    href="https://web.whatsapp.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                  >
+                    <span>Open WhatsApp Web</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
               </div>
 
               <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
@@ -817,7 +851,7 @@ export default function WhatsAppAnalyticsDashboard() {
                             {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <a
-                            href={log.phone_number ? `https://wa.me/${log.phone_number.replace(/\D/g, '')}` : 'https://web.whatsapp.com'}
+                            href={log.phone_number ? `https://web.whatsapp.com/send?phone=${log.phone_number.replace(/\D/g, '')}` : 'https://web.whatsapp.com'}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1"
@@ -825,6 +859,14 @@ export default function WhatsAppAnalyticsDashboard() {
                           >
                             <span>WhatsApp →</span>
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLog(log.id, log.shop_name)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer"
+                            title={`Delete log for ${log.shop_name}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     );

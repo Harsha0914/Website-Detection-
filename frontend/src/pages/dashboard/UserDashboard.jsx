@@ -188,7 +188,28 @@ export default function UserDashboard() {
 
   useEffect(() => {
     checkGoogleStatus();
+
+    // Auto-detect high-accuracy GPS on initial mount if geolocation permission is granted
+    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        if (result.state === 'granted') {
+          handleDetectLocation(false);
+        }
+        result.onchange = () => {
+          if (result.state === 'granted') {
+            handleDetectLocation(false);
+          }
+        };
+      }).catch(() => {});
+    }
   }, []);
+
+  // Keep input value in sync with searchCenter name when not typing
+  useEffect(() => {
+    if (!isTyping && searchCenter?.name && forceInputValue === null) {
+      setForceInputValue(searchCenter.name);
+    }
+  }, [searchCenter?.name, isTyping, forceInputValue]);
 
   const handleDetectLocation = async (autoSearch = true) => {
     setLocationStatus('Acquiring high-accuracy device GPS…');
@@ -201,7 +222,6 @@ export default function UserDashboard() {
         const accuracyText = pos?.accuracy ? `(±${pos.accuracy} m)` : '';
         setLocationStatus(`📍 GPS locked: ${displayName} ${accuracyText}`.trim());
         setActiveStep(2);
-        setTimeout(() => setLocationStatus(''), 4500);
       }
     } catch (err) {
       const msg = err?.message || String(err || '');
@@ -991,11 +1011,14 @@ export default function UserDashboard() {
                   </div>
                 </div>
               )}
-              {locationStatus && (
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
+              {(locationStatus || (searchCenter.type === 'gps' && locationPermissionGranted && searchCenter.name)) && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
                   <div className="ud-status-msg">
                     <Navigation style={{ width: 13, height: 13 }} />
-                    <span>{locationStatus}</span>
+                    <span>
+                      {locationStatus ||
+                        `📍 GPS locked: ${searchCenter.name} ${searchCenter.accuracy ? `(±${searchCenter.accuracy} m)` : ''}`.trim()}
+                    </span>
                   </div>
                 </div>
               )}

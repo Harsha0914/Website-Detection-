@@ -16,6 +16,8 @@ export const useAuthStore = create((set, get) => ({
         username: cleanIdentifier,
         email: cleanIdentifier,
         password,
+      }, {
+        timeout: 10000,
       });
       const data = res.data;
 

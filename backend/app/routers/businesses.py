@@ -485,7 +485,7 @@ def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
                 "key": settings.GOOGLE_PLACES_API_KEY,
                 "language": "en"
             }
-            res = requests.get(url, params=params, timeout=5)
+            res = requests.get(url, params=params, timeout=2.5)
             if res.ok:
                 data = res.json()
                 if data.get("status") == "OK" and data.get("results"):
@@ -523,14 +523,13 @@ def reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
         import requests
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lng}&zoom=16&addressdetails=1"
         headers = {"User-Agent": "ShopPresenceApp/1.0", "Accept-Language": "en"}
-        res = requests.get(url, headers=headers, timeout=5)
+        res = requests.get(url, headers=headers, timeout=4)
         if res.ok:
             data = res.json()
             addr = data.get("address", {})
-            neighborhood = addr.get("suburb") or addr.get("neighbourhood") or addr.get("residential") or addr.get("subdistrict")
-            city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("county") or addr.get("state_district")
-            state = addr.get("state")
-            parts = [p for p in [neighborhood, city, state] if p]
+            suburb = addr.get("suburb") or addr.get("neighbourhood") or addr.get("residential") or addr.get("quarter") or addr.get("subdistrict")
+            city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state_district")
+            parts = [p for p in [suburb, city] if p]
             short_name = ", ".join(parts[:2]) if parts else (data.get("display_name", "").split(",")[0] or "Current Location")
             return {
                 "name": short_name,

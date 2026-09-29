@@ -88,8 +88,9 @@ export default function LoginPage() {
       if (user?.role === 'ADMIN') {
         navigate('/admin/dashboard', { replace: true });
       } else {
-        const from = location.state?.from?.pathname || '/dashboard';
-        navigate(from, { replace: true });
+        const from = location.state?.from?.pathname;
+        const target = (from && from !== '/login' && from !== '/') ? from : '/dashboard';
+        navigate(target, { replace: true });
       }
     }
   }, [isAuthenticated, user, navigate, location]);
@@ -117,8 +118,9 @@ export default function LoginPage() {
       if (userInfo.role === 'ADMIN') {
         navigate('/admin/dashboard', { replace: true });
       } else {
-        const from = location.state?.from?.pathname || '/dashboard';
-        navigate(from, { replace: true });
+        const from = location.state?.from?.pathname;
+        const target = (from && from !== '/login' && from !== '/') ? from : '/dashboard';
+        navigate(target, { replace: true });
       }
     } catch (err) {
       // Error handled by store
@@ -265,14 +267,14 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Back to Home Button */}
+        {/* Back to Overview Button */}
         <div className="mt-6 text-center">
           <Link
-            to="/"
+            to="/landing"
             className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 px-4 py-2.5 rounded-full transition-all shadow-xs"
           >
             <ArrowLeft className="w-4 h-4 text-blue-600" />
-            <span>Back to Home</span>
+            <span>Explore Overview &amp; Features</span>
           </Link>
         </div>
       </div>

@@ -77,7 +77,7 @@ export function getWhatsAppWebFallbackUrl(business, customMsg = null) {
   const shopName = business?.name || 'your shop';
   const phoneDigits = formatPhoneNumber(business?.phone, shopName, business?.id || business?.external_place_id || '');
   const msg = customMsg || `Hello ${shopName}, I would love to connect regarding your business website presence!`;
-  return `https://api.whatsapp.com/send?phone=${phoneDigits}&text=${encodeURIComponent(msg)}`;
+  return `https://web.whatsapp.com/send?phone=${phoneDigits}&text=${encodeURIComponent(msg)}`;
 }
 
 export async function launchWhatsAppApp(business, customMsg = null) {
@@ -89,22 +89,31 @@ export async function launchWhatsAppApp(business, customMsg = null) {
     : `Hello ${shopName}, I am reaching out from Lexon IT! We noticed your business listing on Website Presence Detection doesn't have an active website yet. At Lexon IT, our main focus is helping local businesses with high-quality, modern website designs at very low cost with guaranteed 100% customer satisfaction. We would love to build a custom website for your shop to grow your sales! Please reply if you are interested.`;
   const message = customMsg || defaultMsg;
 
-  // 1. Automatically track outbound contact in database so 'WhatsApp Numbers Contacted' and 'Messages Sent' update live
+  // 1. Launch WhatsApp Desktop/Mobile app protocol directly, or fallback to direct web
+  const appUrl = getWhatsAppUrl(business, message);
+  const webUrl = getWhatsAppWebFallbackUrl(business, message);
   try {
-    await trackWhatsAppContact(phoneDigits, shopName, business?.id, message);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('whatsapp-updated', { detail: { action: 'sent', phone: phoneDigits, shop: shopName } }));
-    }
-  } catch (err) {
-    console.warn('Could not record WhatsApp contact event:', err);
+    const a = document.createElement('a');
+    a.href = appUrl;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (e) {
+    window.open(webUrl, '_blank');
   }
 
-  // 2. Launch WhatsApp Desktop/Mobile app protocol or Web fallback
-  const appUrl = getWhatsAppUrl(business, message);
-  try {
-    window.location.href = appUrl;
-  } catch (e) {
-    window.open(getWhatsAppWebFallbackUrl(business, message), '_blank');
+  // 2. Dispatch prompt event so user must confirm they actually sent the message before it is logged
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('whatsapp-confirm-prompt', {
+        detail: {
+          phone: phoneDigits,
+          shopName,
+          businessId: business?.id,
+          message,
+        },
+      })
+    );
   }
 }
 
@@ -206,6 +215,14 @@ export async function resetWhatsAppHistory() {
   const res = await api.delete('/whatsapp/reset');
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('whatsapp-updated', { detail: { reset: true } }));
+  }
+  return res.data;
+}
+
+export async function deleteWhatsAppMessage(messageId) {
+  const res = await api.delete(`/whatsapp/messages/${messageId}`);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('whatsapp-updated', { detail: { action: 'deleted', id: messageId } }));
   }
   return res.data;
 }

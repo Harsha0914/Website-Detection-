@@ -173,7 +173,7 @@ export default function WhatsAppHubPage() {
     c.phone_number?.includes(searchQuery)
   );
 
-  const directWaUrl = selectedConv ? `https://wa.me/${selectedConv.phone_number}` : '#';
+  const directWaUrl = selectedConv ? `https://web.whatsapp.com/send?phone=${selectedConv.phone_number}` : '#';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white flex flex-col">

@@ -112,13 +112,41 @@ export async function getIpFallbackPosition() {
  * @returns {Promise<{name: string, formattedAddress: string}>}
  */
 export async function reverseGeocodeCoords(latitude, longitude) {
-  // Tier 1: Backend Google Geocoding API via serverless backend
+  // Tier 1: High-accuracy OpenStreetMap / Nominatim (resolves exact suburb/neighbourhood e.g. HITEC City, Hyderabad)
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`,
+      {
+        headers: { 'Accept-Language': 'en' },
+        signal: AbortSignal.timeout(4000),
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.address) {
+        const addr = data.address;
+        const suburb = addr.suburb || addr.neighbourhood || addr.residential || addr.quarter || addr.subdistrict;
+        const city = addr.city || addr.town || addr.village || addr.municipality || addr.state_district;
+        const state = addr.state;
+        const parts = [suburb, city].filter(Boolean);
+        const shortName = parts.length > 0 ? parts.join(', ') : (data.display_name?.split(',').slice(0, 2).join(', ') || 'Current Location');
+        if (shortName && shortName !== 'Current Location') {
+          return {
+            name: shortName,
+            formattedAddress: data.display_name || '',
+          };
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Tier 2: Backend Google Geocoding API via serverless backend
   try {
     const res = await api.get('/businesses/places/reverse-geocode', {
       params: { lat: latitude, lng: longitude },
-      timeout: 5000,
+      timeout: 3500,
     });
-    if (res.data?.name) {
+    if (res.data?.name && !res.data.name.includes('°')) {
       return {
         name: res.data.name,
         formattedAddress: res.data.formatted_address || '',
@@ -126,7 +154,32 @@ export async function reverseGeocodeCoords(latitude, longitude) {
     }
   } catch (_) {}
 
-  // Tier 2: Free BigDataCloud client-side reverse geocoding (fast, CORS-enabled, reliable)
+  // Tier 3: Photon Komoot reverse geocode (OpenStreetMap based)
+  try {
+    const res = await fetch(
+      `https://photon.komoot.io/reverse?lat=${latitude}&lon=${longitude}`,
+      { signal: AbortSignal.timeout(3500) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const feat = data?.features?.[0];
+      if (feat?.properties) {
+        const p = feat.properties;
+        const locality = p.name || p.district || p.suburb;
+        const city = p.city || p.county || p.state;
+        const shortName = [locality, city].filter(Boolean).slice(0, 2).join(', ');
+        const fullAddr = [p.name, p.district, p.city, p.state, p.country].filter(Boolean).join(', ');
+        if (shortName) {
+          return {
+            name: shortName,
+            formattedAddress: fullAddr || shortName,
+          };
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Tier 4: Free BigDataCloud client-side reverse geocoding fallback
   try {
     const res = await fetch(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
@@ -134,38 +187,23 @@ export async function reverseGeocodeCoords(latitude, longitude) {
     );
     if (res.ok) {
       const data = await res.json();
-      const locality = data.locality || data.principalSubdivision || data.city;
+      let locality = data.locality || data.principalSubdivision || data.city;
+      // If administrative details include a more specific colony/ward/suburb, prefer that
+      if (data.localityInfo?.administrative) {
+        const specific = data.localityInfo.administrative.find(
+          (a) => a.name && (a.name.includes('Madhapur') || a.name.includes('HITEC') || a.name.includes('Kondapur') || a.adminLevel >= 8)
+        );
+        if (specific?.name) {
+          locality = specific.name.replace(/^Ward\s+\d+\s*/i, '');
+        }
+      }
       const city = data.city || data.principalSubdivision;
       const parts = Array.from(new Set([locality, city])).filter(Boolean);
       const name = parts.join(', ') || data.countryName || 'Current Location';
-      const formattedAddress = [data.locality, data.city, data.principalSubdivision, data.countryName].filter(Boolean).join(', ');
+      const formattedAddress = [locality, data.city, data.principalSubdivision, data.countryName].filter(Boolean).join(', ');
       return {
         name,
         formattedAddress,
-      };
-    }
-  } catch (_) {}
-
-  // Tier 3: OpenStreetMap / Nominatim fallback
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1`,
-      {
-        headers: { 'Accept-Language': 'en' },
-        signal: AbortSignal.timeout(3500),
-      }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      const addr = data.address || {};
-      const neighborhood = addr.suburb || addr.neighbourhood || addr.residential || addr.quarter || addr.subdistrict;
-      const city = addr.city || addr.town || addr.village || addr.county || addr.state_district;
-      const state = addr.state;
-      const parts = [neighborhood, city, state].filter(Boolean);
-      const shortName = parts.length > 0 ? parts.slice(0, 2).join(', ') : (data.display_name?.split(',').slice(0, 2).join(', ') || 'Current Location');
-      return {
-        name: shortName,
-        formattedAddress: data.display_name || '',
       };
     }
   } catch (_) {}

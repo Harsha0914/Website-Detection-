@@ -1402,6 +1402,34 @@ def reset_history(
     )
 
 
+@router.delete("/messages/{message_id}")
+def delete_single_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Deletes an individual WhatsApp message from the communications log.
+    If the conversation has no remaining messages, also removes the empty conversation.
+    """
+    msg = db.query(WhatsAppMessage).filter(WhatsAppMessage.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    conv_id = msg.conversation_id
+    db.delete(msg)
+    db.commit()
+
+    # If no messages remain in this conversation, clean up conversation as well
+    remaining = db.query(WhatsAppMessage).filter(WhatsAppMessage.conversation_id == conv_id).count()
+    if remaining == 0:
+        conv = db.query(WhatsAppConversation).filter(WhatsAppConversation.id == conv_id).first()
+        if conv:
+            db.delete(conv)
+            db.commit()
+
+    return {"status": "success", "message": f"Message {message_id} deleted successfully"}
+
+
 # =============================================================================
 # 17. META WHATSAPP CLOUD API CONFIGURATION & TEST
 # =============================================================================
