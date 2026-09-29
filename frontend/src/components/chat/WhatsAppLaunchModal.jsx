@@ -293,21 +293,16 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
             <>
               {/* EasyBillBro Flyer */}
               <div style={{ padding: '14px 14px 0' }}>
-                <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,.07)', background: '#000' }}>
+                <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,.07)', background: '#0b0f19' }}>
                   <img
                     src='/images/easybillbro-flyer.jpg'
                     alt='EasyBillBro - Restaurant Billing & POS'
-                    style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: 185, objectPosition: 'top' }}
+                    style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: 200, objectPosition: 'top' }}
                     onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
                   />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.75) 0%, transparent 60%)', pointerEvents: 'none' }} />
-                  <div style={{ position: 'absolute', bottom: 10, left: 14, right: 14 }}>
-                    <div style={{ color: '#fff', fontSize: 12.5, fontWeight: 800 }}>EasyBillBro - Restaurant Billing & POS</div>
-                    <div style={{ color: '#f87171', fontSize: 11, fontWeight: 700 }}>POS • QR Ordering • Complete Restaurant Management</div>
-                  </div>
                   <button
                     onClick={handleCopyImage}
-                    style={{ position: 'absolute', top: 10, right: 10, background: imgCopied ? 'rgba(16,185,129,.9)' : 'rgba(0,0,0,.65)', border: 'none', borderRadius: 10, padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: '#fff', fontSize: 11, fontWeight: 700, backdropFilter: 'blur(4px)' }}
+                    style={{ position: 'absolute', top: 10, right: 10, background: imgCopied ? 'rgba(16,185,129,.95)' : 'rgba(0,0,0,.7)', border: '1px solid rgba(255,255,255,.2)', borderRadius: 10, padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: '#fff', fontSize: 11, fontWeight: 700, backdropFilter: 'blur(6px)', boxShadow: '0 2px 6px rgba(0,0,0,.3)' }}
                   >
                     {imgCopied ? <><Check size={12} /> Copied!</> : <><Image size={12} /> Copy Flyer</>}
                   </button>
