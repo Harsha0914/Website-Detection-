@@ -59,8 +59,11 @@ router = APIRouter(
 # =============================================================================
 
 # IMPORTANT:
-# This must be the same verification token configured in Meta.
-WEBHOOK_VERIFY_TOKEN = "shoppresence_whatsapp_webhook_token_123"
+# This is the verification token configured in Meta Developer Console.
+# Keep it in sync with WHATSAPP_WEBHOOK_VERIFY_TOKEN in your .env / Render env vars.
+def _get_verify_token() -> str:
+    from app.config import settings
+    return settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN or "shoppresence_whatsapp_webhook_token_123"
 
 
 # =============================================================================
@@ -98,7 +101,7 @@ def verify_whatsapp_webhook(
 
     if (
         hub_mode == "subscribe"
-        and hub_verify_token == WEBHOOK_VERIFY_TOKEN
+        and hub_verify_token == _get_verify_token()
     ):
         if hub_challenge:
             return Response(
@@ -1431,7 +1434,7 @@ def delete_single_message(
 
 
 # =============================================================================
-# 17. META WHATSAPP CLOUD API CONFIGURATION & TEST
+# 17. WHATSAPP API CONFIGURATION, TEST & SYNC
 # =============================================================================
 
 @router.get("/settings")
@@ -1439,18 +1442,25 @@ def get_whatsapp_api_settings_route(
     db: Session = Depends(get_db),
 ):
     """
-    Retrieves the current Meta WhatsApp Cloud API credentials and webhook status.
+    Retrieves the current WhatsApp API credentials (Mr LAD / Meta Cloud) and webhook status.
     """
+    from app.config import settings as app_settings
     from app.services.whatsapp_cloud_client import get_whatsapp_settings
     settings = get_whatsapp_settings(db)
     return {
-        "meta_app_id": settings.meta_app_id or "",
-        "business_account_id": settings.business_account_id or "",
-        "phone_number_id": settings.phone_number_id or "",
-        "access_token_configured": bool(settings.access_token),
-        "access_token_preview": f"{settings.access_token[:8]}...{settings.access_token[-6:]}" if settings.access_token and len(settings.access_token) > 16 else "",
+        "provider": getattr(app_settings, "WHATSAPP_PROVIDER", "mr_lad"),
+        "whatsapp_number": getattr(app_settings, "WHATSAPP_PHONE_NUMBER", "+917780181920"),
+        "business_account_id": getattr(app_settings, "WHATSAPP_BUSINESS_ACCOUNT_ID", settings.business_account_id or "2912980445715643"),
+        "phone_number_id": getattr(app_settings, "WHATSAPP_PHONE_NUMBER_ID", settings.phone_number_id or "1407135925808911"),
+        "lad_api_base_url": getattr(app_settings, "LAD_API_BASE_URL", ""),
+        "lad_auth_base_url": getattr(app_settings, "LAD_AUTH_BASE_URL", ""),
+        "lad_auth_email": getattr(app_settings, "LAD_AUTH_EMAIL", "api@lexonit.com"),
+        "has_lad_password": bool(getattr(app_settings, "LAD_AUTH_PASSWORD", "")),
+        "has_lad_token": bool(getattr(app_settings, "LAD_API_TOKEN", "") or settings.access_token),
+        "default_template_name": getattr(app_settings, "WHATSAPP_DEFAULT_TEMPLATE_NAME", "lexonit_utility_notification"),
+        "access_token_configured": bool(settings.access_token or getattr(app_settings, "LAD_API_TOKEN", "")),
         "webhook_verify_token": settings.webhook_verify_token or "shoppresence_whatsapp_webhook_token_123",
-        "api_version": settings.api_version or "v21.0",
+        "api_version": settings.api_version or "v22.0",
         "is_test_mode": bool(settings.is_test_mode),
         "webhook_url": "/api/whatsapp/webhook"
     }
@@ -1462,46 +1472,64 @@ def update_whatsapp_api_settings_route(
     db: Session = Depends(get_db),
 ):
     """
-    Updates the Meta WhatsApp Cloud API credentials (Phone Number ID, Access Token, etc.).
+    Updates the WhatsApp API credentials (Mr LAD / Meta Cloud).
     """
+    from app.config import settings as app_settings
     from app.services.whatsapp_cloud_client import get_whatsapp_settings
     settings = get_whatsapp_settings(db)
     
-    if "meta_app_id" in payload:
-        settings.meta_app_id = payload["meta_app_id"]
-    if "meta_app_secret" in payload:
-        settings.meta_app_secret = payload["meta_app_secret"]
     if "business_account_id" in payload:
         settings.business_account_id = payload["business_account_id"]
     if "phone_number_id" in payload:
         settings.phone_number_id = payload["phone_number_id"]
     if "access_token" in payload and payload["access_token"]:
         settings.access_token = payload["access_token"]
+    if "lad_api_token" in payload and payload["lad_api_token"]:
+        settings.access_token = payload["lad_api_token"]
+        app_settings.LAD_API_TOKEN = payload["lad_api_token"]
+    if "lad_auth_password" in payload and payload["lad_auth_password"]:
+        app_settings.LAD_AUTH_PASSWORD = payload["lad_auth_password"]
+    if "default_template_name" in payload and payload["default_template_name"]:
+        app_settings.WHATSAPP_DEFAULT_TEMPLATE_NAME = payload["default_template_name"]
     if "webhook_verify_token" in payload and payload["webhook_verify_token"]:
         settings.webhook_verify_token = payload["webhook_verify_token"]
     if "api_version" in payload and payload["api_version"]:
         settings.api_version = payload["api_version"]
     if "is_test_mode" in payload:
         settings.is_test_mode = bool(payload["is_test_mode"])
+        app_settings.WHATSAPP_IS_TEST_MODE = bool(payload["is_test_mode"])
         
     db.commit()
     db.refresh(settings)
     return {
         "status": "success",
-        "message": "WhatsApp Cloud API settings saved successfully",
+        "message": "WhatsApp API settings saved successfully",
         "phone_number_id": settings.phone_number_id,
         "is_test_mode": settings.is_test_mode
     }
 
 
-@router.post("/settings/test")
-def test_whatsapp_cloud_message(
-    to_phone: str = Query(..., description="Recipient phone number with country code, e.g. 919154189219"),
-    message: str = Query("Hello! This is a test verification message from Lexon IT WhatsApp Cloud API.", description="Test text body"),
+@router.post("/sync")
+def sync_whatsapp_conversations_route(
     db: Session = Depends(get_db),
 ):
     """
-    Sends a test verification message using the configured Meta WhatsApp Cloud API credentials.
+    Polls Mr LAD API for recent conversations and inbound messages.
+    Automatically triggers AI sales responses for newly received incoming messages.
+    """
+    from app.services.mr_lad_client import MrLadWhatsAppClient
+    result = MrLadWhatsAppClient.sync_recent_conversations(db=db)
+    return result
+
+
+@router.post("/settings/test")
+def test_whatsapp_cloud_message(
+    to_phone: str = Query(..., description="Recipient phone number with country code, e.g. +919876543210"),
+    message: str = Query("Hello! This is a test verification message from Lexon IT WhatsApp API.", description="Test text body"),
+    db: Session = Depends(get_db),
+):
+    """
+    Sends a test verification message using the configured WhatsApp API (Mr LAD / Meta Cloud).
     """
     from app.services.whatsapp_cloud_client import WhatsAppCloudClient
     success, result, raw = WhatsAppCloudClient.send_text(
@@ -1514,7 +1542,7 @@ def test_whatsapp_cloud_message(
         return {
             "status": "success",
             "message": f"Test message sent successfully to {to_phone}",
-            "wamid": result,
+            "message_id": result,
             "raw_response": raw
         }
     else:

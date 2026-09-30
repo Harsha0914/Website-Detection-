@@ -67,6 +67,26 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
+    # WhatsApp Integration Provider: "mr_lad" (LexonIT WhatsApp API via Mr LAD) or "meta_cloud"
+    WHATSAPP_PROVIDER: str = "mr_lad"
+    WHATSAPP_PHONE_NUMBER: str = "+917780181920"
+
+    # Mr LAD API (LexonIT WhatsApp Integration)
+    LAD_API_BASE_URL: str = "https://lad-waba-comms-stage-asia-axxjxdzmbq-el.a.run.app"
+    LAD_AUTH_BASE_URL: str = "https://lad-backend-stage-axxjxdzmbq-uc.a.run.app"
+    LAD_AUTH_EMAIL: str = "api@lexonit.com"
+    LAD_AUTH_PASSWORD: str = ""
+    LAD_API_TOKEN: str = ""
+    WHATSAPP_DEFAULT_TEMPLATE_NAME: str = "lexonit_utility_notification"
+
+    # Meta WhatsApp Cloud API (direct fallback)
+    WHATSAPP_ACCESS_TOKEN: str = ""
+    WHATSAPP_PHONE_NUMBER_ID: str = "1407135925808911"
+    WHATSAPP_BUSINESS_ACCOUNT_ID: str = "2912980445715643"
+    WHATSAPP_API_VERSION: str = "v22.0"
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: str = "shoppresence_whatsapp_webhook_token_123"
+    WHATSAPP_IS_TEST_MODE: bool = False
+
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
 

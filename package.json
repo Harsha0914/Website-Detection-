@@ -11,6 +11,7 @@
     "backend": "cd backend && venv\\Scripts\\uvicorn app.main:app --reload --host 0.0.0.0 --port 8001",
     "server": "cd backend && venv\\Scripts\\uvicorn app.main:app --reload --host 0.0.0.0 --port 8001",
     "tunnel": "cloudflared tunnel --url http://127.0.0.1:8001",
+    "ping": "node -e \"setInterval(() => fetch('https://website-backend-d8t5.onrender.com/health').then(r => r.json()).then(d => console.log(new Date().toLocaleTimeString(), '✓ Backend alive')).catch(e => console.error('✗ Backend down:', e.message)), 60000); fetch('https://website-backend-d8t5.onrender.com/health').then(r => r.json()).then(d => console.log('✓ Backend is awake! Safe to register webhook now.', JSON.stringify(d.status))).catch(e => console.error('✗', e))\"",
     "build": "npm --prefix frontend install && npm --prefix frontend run build"
   },
   "devDependencies": {

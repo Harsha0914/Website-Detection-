@@ -12,30 +12,49 @@ logger = logging.getLogger(__name__)
 
 def get_whatsapp_settings(db: Session) -> WhatsAppApiSettings:
     """
-    Retrieves or creates default WhatsApp Cloud API settings.
+    Retrieves or creates WhatsApp Cloud API settings.
+    Env vars take priority over DB values, so credentials set in .env
+    or Render env vars are always respected.
     """
-    settings = db.query(WhatsAppApiSettings).first()
-    if not settings:
-        settings = WhatsAppApiSettings(
+    from app.config import settings as app_settings
+
+    db_settings = db.query(WhatsAppApiSettings).first()
+    if not db_settings:
+        db_settings = WhatsAppApiSettings(
             meta_app_id="",
             meta_app_secret="",
-            business_account_id="",
-            phone_number_id="",
-            access_token="",
-            webhook_verify_token="shoppresence_whatsapp_webhook_token_123",
-            api_version="v21.0",
-            is_test_mode=True,
+            business_account_id=app_settings.WHATSAPP_BUSINESS_ACCOUNT_ID or "",
+            phone_number_id=app_settings.WHATSAPP_PHONE_NUMBER_ID or "",
+            access_token=app_settings.WHATSAPP_ACCESS_TOKEN or "",
+            webhook_verify_token=app_settings.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+            api_version=app_settings.WHATSAPP_API_VERSION,
+            is_test_mode=app_settings.WHATSAPP_IS_TEST_MODE,
         )
-        db.add(settings)
+        db.add(db_settings)
         db.commit()
-        db.refresh(settings)
-    return settings
+        db.refresh(db_settings)
+
+    # Always prefer env vars over DB so we don't have to update DB manually
+    if app_settings.LAD_API_TOKEN:
+        db_settings.access_token = app_settings.LAD_API_TOKEN
+    elif app_settings.WHATSAPP_ACCESS_TOKEN:
+        db_settings.access_token = app_settings.WHATSAPP_ACCESS_TOKEN
+    if app_settings.WHATSAPP_PHONE_NUMBER_ID:
+        db_settings.phone_number_id = app_settings.WHATSAPP_PHONE_NUMBER_ID
+    if app_settings.WHATSAPP_BUSINESS_ACCOUNT_ID:
+        db_settings.business_account_id = app_settings.WHATSAPP_BUSINESS_ACCOUNT_ID
+    # Override test mode only if env explicitly sets it to False (production)
+    if not app_settings.WHATSAPP_IS_TEST_MODE and (app_settings.LAD_AUTH_PASSWORD or app_settings.LAD_API_TOKEN or app_settings.WHATSAPP_ACCESS_TOKEN):
+        db_settings.is_test_mode = False
+
+    return db_settings
 
 
 class WhatsAppCloudClient:
     """
-    Official Meta WhatsApp Cloud API client.
-    Docs: https://developers.facebook.com/docs/whatsapp/cloud-api
+    Unified WhatsApp Client supporting:
+    - Mr LAD API (LexonIT WhatsApp Integration)
+    - Meta WhatsApp Cloud API (direct)
     """
 
     @staticmethod
@@ -55,11 +74,26 @@ class WhatsAppCloudClient:
         to_phone: str,
         text_body: str,
         preview_url: bool = True,
+        recipient_name: Optional[str] = None,
+        template_name: Optional[str] = None,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
-        Sends standard text message via Meta Cloud API.
+        Sends standard text message.
+        Routes via Mr LAD API if provider is "mr_lad", else direct Meta Cloud API.
         Returns: (success: bool, wamid_or_error: str, raw_response: dict)
         """
+        from app.config import settings as app_settings
+
+        # ── Route to Mr LAD API ──────────────────────────────────────────
+        if getattr(app_settings, "WHATSAPP_PROVIDER", "mr_lad") == "mr_lad":
+            from app.services.mr_lad_client import MrLadWhatsAppClient
+            return MrLadWhatsAppClient.send_message(
+                to_phone=to_phone,
+                text_body=text_body,
+                recipient_name=recipient_name,
+                template_name=template_name,
+            )
+
         settings = get_whatsapp_settings(db)
         recipient = cls._clean_phone(to_phone)
 
@@ -109,8 +143,25 @@ class WhatsAppCloudClient:
         variables: Optional[Dict[str, Any]] = None,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
-        Sends approved Meta WhatsApp Template message with variable replacement.
+        Sends approved WhatsApp Template message with variable replacement.
+        Routes via Mr LAD API if provider is "mr_lad", else direct Meta Cloud API.
         """
+        from app.config import settings as app_settings
+
+        # ── Route to Mr LAD API ──────────────────────────────────────────
+        if getattr(app_settings, "WHATSAPP_PROVIDER", "mr_lad") == "mr_lad":
+            from app.services.mr_lad_client import MrLadWhatsAppClient
+            rec_name = None
+            if variables and isinstance(variables, dict):
+                rec_name = str(variables.get("name") or variables.get("1") or variables.get("shop_name") or "")
+            return MrLadWhatsAppClient.send_message(
+                to_phone=to_phone,
+                text_body=None,
+                recipient_name=rec_name,
+                template_name=template_name,
+                language_code=language_code,
+            )
+
         settings = get_whatsapp_settings(db)
         recipient = cls._clean_phone(to_phone)
 
@@ -172,6 +223,15 @@ class WhatsAppCloudClient:
         """
         Sends image/document media message.
         """
+        from app.config import settings as app_settings
+        if getattr(app_settings, "WHATSAPP_PROVIDER", "mr_lad") == "mr_lad":
+            from app.services.mr_lad_client import MrLadWhatsAppClient
+            media_body = f"{caption}\n{media_url}" if caption else media_url
+            return MrLadWhatsAppClient.send_message(
+                to_phone=to_phone,
+                text_body=media_body,
+            )
+
         settings = get_whatsapp_settings(db)
         recipient = cls._clean_phone(to_phone)
 
