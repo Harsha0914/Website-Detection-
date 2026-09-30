@@ -117,7 +117,7 @@ class MrLadWhatsAppClient:
         text_body: Optional[str] = None,
         recipient_name: Optional[str] = None,
         template_name: Optional[str] = None,
-        language_code: str = "en",
+        language_code: str = "en_US",
         template_parameters: Optional[List[str]] = None,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
@@ -188,10 +188,22 @@ class MrLadWhatsAppClient:
             return False, str(err), data
 
         try:
+            # Normalize language code: LexonIT / Meta templates use en_US
+            if not language_code or language_code == "en":
+                language_code = "en_US"
+
             # Strategy 1: look up existing conversation_id → use bulk/send-template (supports parameters)
             conv_id = cls._find_conversation_id(recipient, token)
             if conv_id:
-                params = template_parameters or [display_name]
+                if not template_parameters:
+                    if chosen_template == "easybillbro_bill_generated":
+                        today_str = datetime.utcnow().strftime("%d %b %Y")
+                        params = [display_name, "EasyBillBro", "100", "INV-101", today_str]
+                    else:
+                        params = [display_name]
+                else:
+                    params = template_parameters
+
                 payload = {
                     "conversation_ids": [conv_id],
                     "template_name": chosen_template,

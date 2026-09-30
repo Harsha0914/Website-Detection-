@@ -12,16 +12,21 @@ def test_mr_lad_phone_formatting():
 
 
 def test_mr_lad_send_simulator_mode():
-    """When credentials are not yet entered, simulator mode handles sends gracefully without errors."""
-    success, msg_id, raw = MrLadWhatsAppClient.send_message(
-        to_phone="917780181920",
-        text_body="Hello from LexonIT",
-        recipient_name="Shop Test",
-    )
-    assert success is True
-    assert msg_id.startswith("wamid.LAD_")
-    assert raw["success"] is True
-    assert raw["sent"] == 1
+    """When test mode is active, simulator mode handles sends gracefully without errors."""
+    orig = settings.WHATSAPP_IS_TEST_MODE
+    try:
+        settings.WHATSAPP_IS_TEST_MODE = True
+        success, msg_id, raw = MrLadWhatsAppClient.send_message(
+            to_phone="919876543210",
+            text_body="Hello from LexonIT",
+            recipient_name="Shop Test",
+        )
+        assert success is True
+        assert msg_id.startswith("wamid.LAD_")
+        assert raw["success"] is True
+        assert raw["sent"] == 1
+    finally:
+        settings.WHATSAPP_IS_TEST_MODE = orig
 
 
 def test_unified_client_routes_to_mr_lad(db_session):
