@@ -52,8 +52,8 @@ class MrLadWhatsAppClient:
             return cls._cached_token, None
 
         auth_base = settings.LAD_AUTH_BASE_URL.rstrip("/")
-        email = settings.LAD_AUTH_EMAIL
-        password = settings.LAD_AUTH_PASSWORD
+        email = (settings.LAD_AUTH_EMAIL or "api@lexonit.com").strip().strip('"\'')
+        password = (settings.LAD_AUTH_PASSWORD or "").strip().strip('"\'')
 
         if not password:
             return None, "LAD_AUTH_PASSWORD is not set. Please provide the account password in .env"
@@ -81,8 +81,9 @@ class MrLadWhatsAppClient:
                 return None, f"Login succeeded but no token in response: {data}"
             else:
                 err_text = res.text
-                logger.error(f"[Mr LAD API Auth Error {res.status_code}] {err_text}")
-                return None, f"Auth failed with HTTP {res.status_code}: {err_text}"
+                pwd_hint = f"pwd_len={len(password)}, first={password[:2]!r}, last={password[-2:]!r}" if password else "pwd=empty"
+                logger.error(f"[Mr LAD API Auth Error {res.status_code}] email={email!r}, {pwd_hint}: {err_text}")
+                return None, f"Auth failed with HTTP {res.status_code} (email={email!r}, {pwd_hint}): {err_text}"
         except Exception as e:
             logger.error(f"[Mr LAD API Auth Exception] {e}")
             return None, str(e)
