@@ -11,8 +11,8 @@ from app.database import Base
 
 
 class WhatsAppDirection(str, enum.Enum):
-    INBOUND = "INBOUND"    # From Shop Owner to Lexonity
-    OUTBOUND = "OUTBOUND"  # From Lexonity (AI or Manual) to Shop Owner
+    INBOUND = "INBOUND"    # From Shop Owner to Lexon IT
+    OUTBOUND = "OUTBOUND"  # From Lexon IT (AI or Manual) to Shop Owner
 
 
 class WhatsAppSenderType(str, enum.Enum):
@@ -22,6 +22,7 @@ class WhatsAppSenderType(str, enum.Enum):
     AI = "AI"
     MANUAL_OPERATOR = "MANUAL_OPERATOR"
     HUMAN = "HUMAN"
+    LEXON_IT_TEAM = "LEXON_IT_TEAM"
     LEXONITY_TEAM = "LEXONITY_TEAM"
 
 

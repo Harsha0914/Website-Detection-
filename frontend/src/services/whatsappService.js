@@ -3,8 +3,8 @@ import api from './api';
 /**
  * whatsappService.js
  *
- * WhatsApp Direct Connect & Meta AI Bot Service.
- * Formats valid mobile numbers (+91-9XXXX-XXXXX) and manages Meta Cloud API & Auto AI/Manual modes.
+ * WhatsApp Direct Connect & Lexon IT AI Bot Service.
+ * Formats valid mobile numbers (+91-9XXXX-XXXXX) and manages Lexon IT WhatsApp API & Auto AI/Manual modes.
  */
 
 export function formatPhoneNumber(phone, shopName = '', placeId = '') {

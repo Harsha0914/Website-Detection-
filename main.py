@@ -7,4 +7,5 @@ backend_path = (Path(__file__).resolve().parent / "backend").as_posix()
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
+# pyrefly: ignore [missing-import]
 from app.main import app

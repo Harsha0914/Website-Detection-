@@ -14,7 +14,7 @@ function buildMessage(business) {
 
 async function copyImageToClipboard() {
   try {
-    const res = await fetch('/images/easybillbro-flyer.jpg');
+    const res = await fetch('/images/lexonit-flyer.jpg');
     const blob = await res.blob();
     const bitmap = await createImageBitmap(blob);
     const canvas = document.createElement('canvas');
@@ -291,12 +291,12 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
           {/* STEP 0: Compose & Preview */}
           {step === 0 && (
             <>
-              {/* EasyBillBro Flyer */}
+              {/* Lexon IT Website Flyer */}
               <div style={{ padding: '14px 14px 0' }}>
                 <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,.07)', background: '#0b0f19' }}>
                   <img
-                    src='/images/easybillbro-flyer.jpg'
-                    alt='EasyBillBro - Restaurant Billing & POS'
+                    src='/images/lexonit-flyer.jpg'
+                    alt='Lexon IT - Website Detection & Digital Growth for Local Shops'
                     style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: 200, objectPosition: 'top' }}
                     onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
                   />

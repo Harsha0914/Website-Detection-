@@ -857,7 +857,7 @@ def send_manual_whatsapp_reply(
     db: Session = Depends(get_db),
 ):
     """
-    Sends a manual response from Lexonity Team
+    Sends a manual response from Lexon IT Team
     to the shop owner over WhatsApp.
     """
 
@@ -869,7 +869,7 @@ def send_manual_whatsapp_reply(
             message_text=payload.message,
             operator_name=(
                 payload.operator_name
-                or "Lexonity Team"
+                or "Lexon IT Team"
             ),
         )
 

@@ -413,11 +413,11 @@ export default function WhatsAppHubPage() {
                             : 'bg-amber-600 text-white rounded-br-none'
                         }`}>
                           <div className={`font-bold text-[10px] uppercase tracking-wider ${isIncoming ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-100'}`}>
-                            {isIncoming ? `${selectedConv.shop_name} (Incoming WhatsApp)` : isBot ? '🤖 Meta AI Assistant (Outbound)' : '👤 Store Manager (Manual)'}
+                            {isIncoming ? `${selectedConv.shop_name} (Incoming WhatsApp)` : isBot ? '🤖 Lexon IT AI Assistant (Outbound)' : '👤 Store Manager (Manual)'}
                           </div>
 
                           <p className="whitespace-pre-wrap">
-                            {m.message_body?.replace(/^🤖 \[Meta AI Assistant\]: /, '')}
+                            {m.message_body?.replace(/^🤖 \[(?:Lexon IT|Meta) AI Assistant\]: /, '')}
                           </p>
 
                           <div className={`flex items-center justify-end gap-1 text-[9px] ${isIncoming ? 'text-slate-400' : 'text-emerald-200'}`}>

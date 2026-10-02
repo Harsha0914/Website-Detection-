@@ -156,69 +156,7 @@ def _get_db_real_places(
     cos_lat = max(0.1, abs(math.cos(math.radians(latitude))))
     lng_deg_delta = search_limit_km / (110.0 * cos_lat) + 0.05
 
-    # 1. First include verified regional places in-memory
-    try:
-        from app.services.verified_shops_data import VERIFIED_REGIONAL_PLACES
-        vp_candidates = []
-        for vp in VERIFIED_REGIONAL_PLACES:
-            v_lat = vp.get("latitude")
-            v_lng = vp.get("longitude")
-            v_name = vp.get("name")
-            if v_lat is None or v_lng is None or not v_name:
-                continue
-
-            # Instant bounding box check (skips distant cities in 1 instruction)
-            if abs(v_lat - latitude) > lat_deg_delta or abs(v_lng - longitude) > lng_deg_delta:
-                continue
-
-            v_cat = vp.get("category") or "General Store"
-            v_addr = vp.get("address", "")
-
-            # Match search using precomputed keyword categories
-            if not is_place_matching_search(v_name, v_cat, v_addr, clean_kw, clean_cat, precomputed_matched_cats=precomputed_matched_cats):
-                continue
-
-            dist = haversine_km(latitude, longitude, v_lat, v_lng)
-            if dist > search_limit_km:
-                continue
-
-            norm_key = (v_name.strip().lower(), round(v_lat, 4), round(v_lng, 4))
-            pid = vp.get("place_id") or f"vp_{round(v_lat, 5)}_{round(v_lng, 5)}"
-            if norm_key in seen_keys or pid in seen_pids:
-                continue
-            seen_keys.add(norm_key)
-            seen_pids.add(pid)
-
-            p_data = PlaceData(
-                place_id=pid,
-                name=v_name,
-                category=v_cat,
-                address=v_addr,
-                short_address=vp.get("short_address") or v_addr or v_name,
-                google_maps_uri=f"https://maps.google.com/?q={v_lat},{v_lng}",
-                latitude=v_lat,
-                longitude=v_lng,
-                phone=_parse_real_phone(vp.get("phone")),
-                website_url=_clean_website(vp.get("website_url")),
-                rating=vp.get("rating"),
-                review_count=vp.get("review_count"),
-                business_status="OPERATIONAL",
-                distance_km=round(dist, 3),
-            )
-            vp_candidates.append((dist, p_data))
-
-        # Include places within radius_km, or nearest available up to 50 items
-        in_radius = [p for (d, p) in vp_candidates if d <= radius_km]
-        if in_radius:
-            results.extend(in_radius)
-        else:
-            vp_candidates.sort(key=lambda x: x[0])
-            for d, p in vp_candidates[:50]:
-                results.append(p)
-    except Exception as e:
-        logger.warning(f"Error reading verified regional places: {e}")
-
-    # 2. Query SQLite shop.db
+    # Query genuine businesses from SQLite shop.db (Google Places & OSM crawled records)
     db_candidates = [
         "/tmp/shop.db",
         os.path.join(os.getcwd(), "backend", "shop.db"),
@@ -237,6 +175,8 @@ def _get_db_real_places(
                    latitude, longitude, phone, website_url, rating, review_count, business_status
             FROM businesses
             WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+              AND (external_place_id LIKE 'ChIJ%' OR external_place_id LIKE 'osm_%' OR external_place_id LIKE 'nom_%' OR external_place_id LIKE 'manual_%')
+              AND (source IS NULL OR source != 'verified_seed')
         """)
         rows = cur.fetchall()
         conn.close()
@@ -1438,8 +1378,8 @@ class GooglePlacesProvider(PlacesProvider):
         except Exception as e:
             print(f"Google Places multi-origin search error: {e}")
 
-        # Augment with verified genuine database places
-        db_real = _get_db_real_places(latitude, longitude, max(radius_km, 25.0), canonical_category or category, keyword)
+        # Augment with verified genuine database places strictly within radius
+        db_real = _get_db_real_places(latitude, longitude, radius_km, canonical_category or category, keyword)
         for dp in db_real:
             if dp.place_id not in all_places_map:
                 all_places_map[dp.place_id] = dp
@@ -1455,11 +1395,11 @@ class GooglePlacesProvider(PlacesProvider):
                 p.distance_km = round(dist, 3)
                 valid_results.append(p)
 
-        # If strict radius is very tight and has 0 shops, gracefully include nearest regional shops
+        # If strict radius has 0 shops, allow a minimal 5% boundary tolerance
         if len(valid_results) == 0 and len(all_places_map) > 0:
             for p in all_places_map.values():
                 dist = haversine_km(latitude, longitude, p.latitude, p.longitude)
-                if dist <= max(radius_km * 2.5, 50.0):
+                if dist <= radius_km * 1.05:
                     p.distance_km = round(dist, 3)
                     valid_results.append(p)
 
@@ -2292,15 +2232,6 @@ class OSMPlacesProvider(PlacesProvider):
                 )
             )
 
-        # If zero genuine places exist in remote location, generate GPS-anchored fallback
-        if len(results) == 0:
-            gps_places = generate_gps_centered_places(latitude, longitude, radius_km, target_cat, kw_str, count_needed=25)
-            for gp in gps_places:
-                if gp.place_id not in seen_pids and gp.name.lower().strip() not in seen_names:
-                    seen_pids.add(gp.place_id)
-                    seen_names.add(gp.name.lower().strip())
-                    results.append(gp)
-
         sorted_results = sorted(results, key=lambda x: x.distance_km or 0)
         debug.google_api_raw_count = len(sorted_results)
         debug.results_after_filter = len(sorted_results)
@@ -2309,27 +2240,48 @@ class OSMPlacesProvider(PlacesProvider):
         return sorted_results, debug
 
     def get_place_details(self, place_id: str) -> PlaceData | None:
+        import sqlite3
+        import os
+        from urllib.parse import quote
+
+        db_candidates = [
+            "/tmp/shop.db",
+            os.path.join(os.getcwd(), "backend", "shop.db"),
+            os.path.join(os.getcwd(), "shop.db"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "backend", "shop.db"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "shop.db"),
+        ]
+        existing_dbs = [p for p in db_candidates if os.path.isfile(p)]
+        db_path = max(existing_dbs, key=os.path.getsize) if existing_dbs else "shop.db"
+
         try:
-            from app.services.verified_shops_data import VERIFIED_REGIONAL_PLACES
-            for vp in VERIFIED_REGIONAL_PLACES:
-                if vp.get("place_id") == place_id:
-                    from urllib.parse import quote
-                    gmaps_target = quote(f"{vp['name']}, {vp['address']}")
-                    return PlaceData(
-                        place_id=vp["place_id"],
-                        name=vp["name"],
-                        category=vp["category"],
-                        address=vp["address"],
-                        short_address=vp.get("short_address", vp["address"]),
-                        google_maps_uri=f"https://www.google.com/maps/search/?api=1&query={gmaps_target}",
-                        latitude=vp["latitude"],
-                        longitude=vp["longitude"],
-                        phone=_parse_real_phone(vp.get("phone")),
-                        website_url=vp.get("website_url"),
-                        rating=vp.get("rating"),
-                        review_count=vp.get("review_count"),
-                        business_status="OPERATIONAL",
-                    )
+            conn = sqlite3.connect(db_path, timeout=3.0)
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT external_place_id, name, category, address, short_address, google_maps_uri,
+                       latitude, longitude, phone, website_url, rating, review_count, business_status
+                FROM businesses
+                WHERE external_place_id = ?
+            """, (place_id,))
+            row = cur.fetchone()
+            conn.close()
+            if row:
+                ext_id, name, cat, addr, short_addr, gmaps_uri, lat, lng, phone, web, rating, reviews, status = row
+                return PlaceData(
+                    place_id=ext_id,
+                    name=name,
+                    category=cat or "General Store",
+                    address=addr or "",
+                    short_address=short_addr or addr or name,
+                    google_maps_uri=gmaps_uri or f"https://www.google.com/maps/place/?q={lat},{lng}",
+                    latitude=lat,
+                    longitude=lng,
+                    phone=_parse_real_phone(phone),
+                    website_url=_clean_website(web),
+                    rating=rating,
+                    review_count=reviews,
+                    business_status=status or "OPERATIONAL",
+                )
         except Exception:
             pass
         return None

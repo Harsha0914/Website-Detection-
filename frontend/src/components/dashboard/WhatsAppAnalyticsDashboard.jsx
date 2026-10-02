@@ -156,7 +156,7 @@ export default function WhatsAppAnalyticsDashboard() {
     setSettingsSuccess('');
     try {
       await updateWhatsAppApiSettings(apiConfig);
-      setSettingsSuccess('Meta WhatsApp Cloud API credentials saved successfully!');
+      setSettingsSuccess('Lexon IT WhatsApp API credentials saved successfully!');
       setTimeout(() => setSettingsSuccess(''), 4000);
     } catch (err) {
       console.error('Failed to save settings:', err);
@@ -268,10 +268,10 @@ export default function WhatsAppAnalyticsDashboard() {
           <button
             onClick={handleOpenSettings}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-teal-500/30 hover:bg-teal-500/40 border border-teal-300/40 text-teal-100 font-bold text-xs rounded-2xl shadow-lg shadow-teal-950/30 transition-all active:scale-95 cursor-pointer"
-            title="Configure Meta WhatsApp Cloud API credentials"
+            title="Configure Lexon IT WhatsApp API credentials"
           >
             <Settings className="w-4 h-4 text-teal-200" />
-            <span>Meta API Config</span>
+            <span>Lexon IT API Config</span>
           </button>
 
           <a
@@ -704,7 +704,7 @@ export default function WhatsAppAnalyticsDashboard() {
                 <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
                   <span className="text-slate-500">Live Webhook Status:</span>
                   <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Meta Cloud API Ready
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Lexon IT WhatsApp Ready
                   </span>
                 </div>
               </div>
@@ -828,7 +828,7 @@ export default function WhatsAppAnalyticsDashboard() {
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5 max-w-md">
-                              {log.message_body?.replace(/^🤖 \[Meta AI Assistant\]: /, '')}
+                              {log.message_body?.replace(/^🤖 \[(?:Lexon IT|Meta) AI Assistant\]: /, '')}
                             </p>
                           </div>
                         </div>
@@ -991,7 +991,7 @@ export default function WhatsAppAnalyticsDashboard() {
         </div>
       )}
 
-      {/* ── 9. Meta WhatsApp Cloud API Settings Modal ── */}
+      {/* ── 9. Lexon IT WhatsApp API Settings Modal ── */}
       {settingsModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
@@ -1002,10 +1002,10 @@ export default function WhatsAppAnalyticsDashboard() {
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    Meta WhatsApp Cloud API Configuration
+                    Lexon IT WhatsApp API Configuration
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Connect your official Meta Developer WhatsApp Business Account
+                    Official Lexon IT WhatsApp Business Messaging (via Mr LAD API)
                   </p>
                 </div>
               </div>
@@ -1034,7 +1034,7 @@ export default function WhatsAppAnalyticsDashboard() {
                   type="text"
                   value={apiConfig.phone_number_id}
                   onChange={(e) => setApiConfig({ ...apiConfig, phone_number_id: e.target.value })}
-                  placeholder="e.g. 559123456789012"
+                  placeholder="e.g. 1407135925808911"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
@@ -1047,20 +1047,20 @@ export default function WhatsAppAnalyticsDashboard() {
                   type="text"
                   value={apiConfig.business_account_id}
                   onChange={(e) => setApiConfig({ ...apiConfig, business_account_id: e.target.value })}
-                  placeholder="e.g. 109876543210987"
+                  placeholder="e.g. 2912980445715643"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Meta Permanent Access Token
+                  Lexon IT / Mr LAD Bearer API Token
                 </label>
                 <input
                   type="password"
                   value={apiConfig.access_token}
                   onChange={(e) => setApiConfig({ ...apiConfig, access_token: e.target.value })}
-                  placeholder="Paste Meta EAAB... System User Token"
+                  placeholder="Optional token (or auto-authenticates with api@lexonit.com)"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-hidden focus:ring-2 focus:ring-teal-500"
                 />
               </div>
@@ -1087,14 +1087,14 @@ export default function WhatsAppAnalyticsDashboard() {
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
                   >
                     <option value="test">Simulator / Test Mode</option>
-                    <option value="live">Live Meta Cloud API</option>
+                    <option value="live">Live Lexon IT WhatsApp API</option>
                   </select>
                 </div>
               </div>
 
               {/* Webhook URL indicator */}
               <div className="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-2xl text-xs space-y-1">
-                <div className="font-bold text-slate-700 dark:text-slate-300">Meta Webhook Callback URL:</div>
+                <div className="font-bold text-slate-700 dark:text-slate-300">Lexon IT Webhook Callback URL:</div>
                 <code className="text-[11px] text-teal-600 dark:text-teal-400 break-all select-all font-mono">
                   {typeof window !== 'undefined' ? `${window.location.origin}/api/whatsapp/webhook` : '/api/whatsapp/webhook'}
                 </code>
@@ -1115,7 +1115,7 @@ export default function WhatsAppAnalyticsDashboard() {
                   className="px-5 py-2.5 text-xs font-black text-white bg-teal-600 hover:bg-teal-500 rounded-xl shadow-lg shadow-teal-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {savingSettings ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                  <span>Save Meta Credentials</span>
+                  <span>Save Lexon IT Credentials</span>
                 </button>
               </div>
             </form>

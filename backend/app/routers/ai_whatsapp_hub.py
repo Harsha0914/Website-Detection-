@@ -50,11 +50,11 @@ class BulkWhatsAppBroadcastSchema(BaseModel):
     shops: List[Dict[str, Any]]
     custom_message: Optional[str] = None
     auto_ai_enabled: Optional[bool] = True
-    operator_name: Optional[str] = "Lexonity AI Specialist"
+    operator_name: Optional[str] = "Lexon IT AI Specialist"
 
 class MessageSendSchema(BaseModel):
     message_text: str
-    operator_name: Optional[str] = "Lexonity Team"
+    operator_name: Optional[str] = "Lexon IT Team"
 
 class ToggleAISchema(BaseModel):
     enabled: bool
@@ -266,7 +266,7 @@ def send_message(
             db=db,
             conversation_id=conversation_id,
             message_text=payload.message_text,
-            operator_name=payload.operator_name or "Lexonity Specialist"
+            operator_name=payload.operator_name or "Lexon IT Specialist"
         )
         return {
             "status": "success",
@@ -589,7 +589,7 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
                 conversation_id=conv.id,
                 direction=WhatsAppDirection.OUTBOUND,
                 sender_type=WhatsAppSenderType.AI_BOT if payload.auto_ai_enabled else WhatsAppSenderType.MANUAL_OPERATOR,
-                sender_name=payload.operator_name or "Lexonity AI Assistant",
+                sender_name=payload.operator_name or "Lexon IT AI Assistant",
                 message_body=personalized_msg,
                 ai_generated=bool(payload.auto_ai_enabled),
                 status="sent" if whatsapp_sent else "delivered",

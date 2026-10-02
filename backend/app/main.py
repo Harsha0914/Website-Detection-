@@ -162,3 +162,31 @@ def mongodb_health():
     from app.mongodb import get_mongo_status
     return get_mongo_status()
 
+
+@app.on_event("startup")
+async def start_whatsapp_background_poller():
+    """
+    Background worker that continuously syncs incoming WhatsApp messages
+    from the Mr LAD API and automatically triggers the Website Detection AI sales assistant.
+    """
+    import asyncio
+
+    async def _poller():
+        await asyncio.sleep(2)
+        while True:
+            try:
+                from app.database import SessionLocal
+                from app.services.mr_lad_client import MrLadWhatsAppClient
+
+                db = SessionLocal()
+                try:
+                    await asyncio.to_thread(MrLadWhatsAppClient.sync_recent_conversations, db)
+                finally:
+                    db.close()
+            except Exception:
+                pass
+            await asyncio.sleep(4)
+
+    asyncio.create_task(_poller())
+
+

@@ -227,15 +227,23 @@ function categoryMatchesBusiness(shopCat, shopName, shopAddr, selectedCategory) 
     return true;
   }
 
-  // 2. Any synonym matches shopCat, shopName, or shopAddr
+  // 2. Direct synonym match on shop's category tag
   for (const syn of synonyms) {
-    if (
-      shopCat === syn ||
-      shopCat.includes(syn) ||
-      syn.includes(shopCat) ||
-      shopName.includes(syn) ||
-      shopAddr.includes(syn)
-    ) {
+    if (shopCat === syn || shopCat.includes(syn) || syn.includes(shopCat)) {
+      return true;
+    }
+  }
+
+  // If shopCat is already a known specific category that differs from targetCat,
+  // do NOT match it to a different category just because of loose words in shopName!
+  const isGeneric = !shopCat || ['general store', 'store', 'shop', 'commercial', 'unclassified', 'other', 'point_of_interest', 'establishment'].includes(shopCat);
+  if (!isGeneric) {
+    return false;
+  }
+
+  // 3. Fallback: Only for generic/unclassified shops, check if shopName or address strongly indicates this category
+  for (const syn of synonyms) {
+    if (syn.length >= 4 && (shopName.includes(syn) || shopAddr.includes(syn))) {
       return true;
     }
   }

@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Tuple, List
@@ -34,14 +35,12 @@ class MrLadWhatsAppClient:
     def get_token(cls, force_refresh: bool = False) -> Tuple[Optional[str], Optional[str]]:
         """
         Retrieves a valid JWT Bearer token for Mr LAD API.
-        Uses static token if configured, or logs in via auth endpoint and caches the token for 6 days.
+        Uses static token if configured, or logs in via auth endpoint and caches for 6 days.
         Returns: (token, error_message)
         """
-        # If user configured a direct token in .env, use it
         if settings.LAD_API_TOKEN and not force_refresh:
             return settings.LAD_API_TOKEN, None
 
-        # Check cached token
         now = datetime.utcnow()
         if (
             not force_refresh
@@ -74,7 +73,6 @@ class MrLadWhatsAppClient:
                 token = data.get("token") or data.get("access_token") or data.get("jwt")
                 if token:
                     cls._cached_token = token
-                    # Token is valid for 7 days per guide; cache for 6 days for safety
                     cls._token_expiry = now + timedelta(days=6)
                     logger.info("[Mr LAD API] Authentication successful, token cached.")
                     return token, None
@@ -100,8 +98,7 @@ class MrLadWhatsAppClient:
             r = requests.get(f"{api_base}/api/conversations", headers=h, params={"limit": 100}, timeout=10)
             if r.status_code != 200:
                 return None
-            convs = r.json().get("data", [])
-            # Normalize phone to digits for comparison
+            convs = r.json().get("data", []) if isinstance(r.json(), dict) else r.json()
             digits = "".join(c for c in phone if c.isdigit())
             for c in convs:
                 c_phone = "".join(ch for ch in (c.get("phone") or "") if ch.isdigit())
@@ -125,23 +122,24 @@ class MrLadWhatsAppClient:
         Sends an outbound WhatsApp message via Mr LAD API.
 
         Strategy:
-        - For EXISTING conversations: uses POST /api/conversations/bulk/send-template
-          with a `parameters` list supporting multi-variable templates.
-        - For NEW contacts (first contact): uses POST /api/conversations/send-template-to-members
-          which creates the conversation automatically (only supports {{1}} = name).
-        - template_name is required on every send as fallback.
+        - For EXISTING conversations: sends free-text directly via
+          POST /api/conversations/{id}/messages  {"content": "..."}
+          No template needed — works within any active conversation.
+        - For NEW contacts: uses POST /api/conversations/send-template-to-members
+          to open the conversation (template required by Meta for first contact),
+          then immediately sends the real custom text as a follow-up free-text message.
         """
         recipient = cls._clean_phone(to_phone)
         display_name = recipient_name or "Shop Owner"
-        chosen_template = template_name or settings.WHATSAPP_DEFAULT_TEMPLATE_NAME or "easybillbro_bill_generated"
+        chosen_template = template_name or settings.WHATSAPP_DEFAULT_TEMPLATE_NAME or "signup_otp"
 
         # Check for test mode or missing credentials
         has_creds = bool(settings.LAD_API_TOKEN or settings.LAD_AUTH_PASSWORD)
         if settings.WHATSAPP_IS_TEST_MODE or not has_creds:
             mock_id = f"wamid.LAD_{uuid.uuid4().hex[:16]}"
             logger.info(
-                f"[Mr LAD API Simulator] Sent to {recipient} (Name: {display_name}, Template: {chosen_template}): "
-                f"Text: '{text_body[:50] if text_body else '[Template Only]'}' (ID: {mock_id})"
+                f"[Mr LAD API Simulator] Sent to {recipient} (Name: {display_name}): "
+                f"Text: '{text_body[:50] if text_body else '[no text]'}' (ID: {mock_id})"
             )
             return True, mock_id, {
                 "success": True,
@@ -162,7 +160,7 @@ class MrLadWhatsAppClient:
             "Content-Type": "application/json",
         }
 
-        # Attempt auto-refresh if token expired on first use
+        # Auto-refresh expired token on 401
         def _post(url: str, payload: dict) -> requests.Response:
             res = requests.post(url, headers=headers, json=payload, timeout=20)
             if res.status_code in (190, 401):
@@ -172,66 +170,85 @@ class MrLadWhatsAppClient:
                     res = requests.post(url, headers=headers, json=payload, timeout=20)
             return res
 
-        def _parse_result(data: dict) -> Tuple[bool, str, dict]:
-            sent_count = data.get("sent", 0)
-            results = data.get("results", [])
-            if data.get("success") or sent_count > 0:
-                msg_id = ""
-                if results:
-                    r0 = results[0]
-                    msg_id = r0.get("message_id") or r0.get("id") or ""
-                if not msg_id:
-                    msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
-                logger.info(f"[Mr LAD API] Sent to {recipient}. Count: {sent_count}, ID: {msg_id}")
-                return True, msg_id, data
-            err = (results[0].get("error") if results else None) or data.get("error") or "Send failed"
-            logger.error(f"[Mr LAD API Send Failed] {err}")
-            return False, str(err), data
+        def _send_freetext(conv_id: str, message: str) -> Tuple[bool, str, dict]:
+            """
+            Send a free-text message into an existing conversation.
+            Uses POST /api/conversations/{id}/messages with {"content": "..."}
+            """
+            res = _post(f"{api_base}/api/conversations/{conv_id}/messages", {"content": message})
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("success"):
+                    inner = data.get("data", {})
+                    msg_id = inner.get("id") or inner.get("message_id") or f"wamid.LAD_{uuid.uuid4().hex[:12]}"
+                    logger.info(f"[Mr LAD API] Free-text sent to {recipient}. ID: {msg_id}")
+                    return True, msg_id, data
+            err_data = {}
+            try:
+                err_data = res.json()
+            except Exception:
+                pass
+            err = err_data.get("detail") or err_data.get("error") or res.text
+            logger.error(f"[Mr LAD API Free-text Error {res.status_code}] {err}")
+            return False, str(err), err_data
+
+        # Build the actual message to show the shop owner
+        outbound_message = text_body or (
+            f"Hello {display_name}! I am reaching out from Lexon IT. "
+            "We noticed your business on our Website Presence Detection platform. "
+            "We help local shops build a professional website, improve Google rankings, "
+            "and grow their digital presence - at very affordable prices with 100% customer satisfaction. "
+            "Interested? Reply YES for a free consultation!"
+        )
 
         try:
-            # Normalize language code: LexonIT / Meta templates use en_US
             if not language_code or language_code == "en":
                 language_code = "en_US"
 
-            # Strategy 1: look up existing conversation_id → use bulk/send-template (supports parameters)
+            # ── Strategy 1: Existing conversation → try free-text directly ──────────
             conv_id = cls._find_conversation_id(recipient, token)
             if conv_id:
-                if not template_parameters:
-                    if chosen_template == "easybillbro_bill_generated":
-                        today_str = datetime.utcnow().strftime("%d %b %Y")
-                        params = [display_name, "EasyBillBro", "100", "INV-101", today_str]
-                    else:
-                        params = [display_name]
-                else:
-                    params = template_parameters
+                logger.info(f"[Mr LAD API] Existing conversation ({conv_id}). Sending free-text.")
+                ok, msg_id, freetext_data = _send_freetext(conv_id, outbound_message)
+                if ok:
+                    return True, msg_id, freetext_data
+                logger.warning(
+                    f"[Mr LAD API] Free-text failed for existing conversation {conv_id} ({msg_id}). "
+                    "Falling back to template initiation (e.g. outside 24h customer window)..."
+                )
 
-                payload = {
-                    "conversation_ids": [conv_id],
-                    "template_name": chosen_template,
-                    "language_code": language_code,
-                    "parameters": params,
-                }
-                res = _post(f"{api_base}/api/conversations/bulk/send-template", payload)
-                if res.status_code == 200:
-                    return _parse_result(res.json())
-                logger.warning(f"[Mr LAD API] bulk/send-template failed ({res.status_code}), falling back...")
-
-            # Strategy 2: new contact → send-template-to-members (creates conversation automatically)
+            # ── Strategy 2: New contact or expired 24h window → template to open conversation, then free-text ──
+            # Step A: Send approved template to create the conversation (Meta requirement for first contact)
+            logger.info(f"[Mr LAD API] New contact {recipient}. Opening conversation with template...")
             member_obj: Dict[str, Any] = {"phone": recipient, "name": display_name}
-            if text_body:
-                member_obj["text"] = text_body
-            payload = {
+            init_payload = {
                 "members": [member_obj],
                 "template_name": chosen_template,
                 "language_code": language_code,
             }
-            res = _post(f"{api_base}/api/conversations/send-template-to-members", payload)
-            data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
-            if res.status_code == 200:
-                return _parse_result(data)
-            err_text = data.get("error") or data.get("message") or res.text
-            logger.error(f"[Mr LAD API Send Error {res.status_code}] {err_text}")
-            return False, f"HTTP {res.status_code}: {err_text}", data
+            res = _post(f"{api_base}/api/conversations/send-template-to-members", init_payload)
+            init_data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
+            if res.status_code != 200 or not (init_data.get("success") or init_data.get("sent", 0) > 0):
+                err_text = init_data.get("error") or init_data.get("message") or res.text
+                logger.error(f"[Mr LAD API Init Error {res.status_code}] {err_text}")
+                return False, f"HTTP {res.status_code}: {err_text}", init_data
+
+            # Step B: Wait briefly, find the new conversation, send the real website detection message
+            logger.info("[Mr LAD API] Template sent. Sending website detection message as follow-up...")
+            time.sleep(1.5)
+            new_conv_id = cls._find_conversation_id(recipient, token)
+            if new_conv_id:
+                ok, msg_id, freetext_data = _send_freetext(new_conv_id, outbound_message)
+                if ok:
+                    return True, msg_id, {"init": init_data, "message": freetext_data}
+                logger.warning("[Mr LAD API] Free-text follow-up failed, returning template result.")
+
+            # Fallback: return the template send result
+            results = init_data.get("results", [])
+            msg_id = (results[0].get("message_id") or results[0].get("id") or "") if results else ""
+            if not msg_id:
+                msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
+            return True, msg_id, init_data
 
         except Exception as e:
             logger.error(f"[Mr LAD API Send Exception] {e}")
@@ -297,7 +314,7 @@ class MrLadWhatsAppClient:
             logger.error(f"[Mr LAD Sync] Failed to fetch conversations: {conv_data}")
             return {"status": "error", "message": conv_data}
 
-        threads = conv_data if isinstance(conv_data, list) else conv_data.get("conversations", [])
+        threads = conv_data.get("data", []) if isinstance(conv_data, dict) else (conv_data if isinstance(conv_data, list) else [])
         synced_threads = 0
         new_inbound_messages = 0
 
@@ -323,22 +340,23 @@ class MrLadWhatsAppClient:
             if not ok:
                 continue
 
-            msgs = msgs_data if isinstance(msgs_data, list) else msgs_data.get("messages", [])
+            msgs = msgs_data.get("data", []) if isinstance(msgs_data, dict) else (msgs_data if isinstance(msgs_data, list) else [])
             synced_threads += 1
 
             for m in msgs:
-                msg_id = m.get("id") or m.get("wamid") or m.get("_id")
-                direction = m.get("direction", "").lower()
-                text = m.get("text") or m.get("body") or m.get("content") or ""
-                sender_name = m.get("sender_name") or m.get("name") or "Shop Owner"
+                msg_id = m.get("id") or m.get("wamid") or m.get("_id") or m.get("external_message_id")
+                role = (m.get("role") or "").lower()
+                direction = (m.get("direction") or "").lower()
+                text = (m.get("content") or m.get("text") or m.get("body") or "").strip()
+                sender_name = m.get("sender_name") or m.get("name") or thread.get("contact_name") or "Shop Owner"
 
                 # Check if it's inbound (from customer to LexonIT)
-                is_inbound = direction in ("inbound", "incoming", "in") or m.get("from_customer") is True
+                is_inbound = (role == "user") or direction in ("inbound", "incoming", "in") or m.get("from_customer") is True
 
                 if is_inbound and text and msg_id:
                     # Check if already processed
                     existing = db.query(WhatsAppMessage).filter(
-                        WhatsAppMessage.whatsapp_message_id == str(msg_id)
+                        WhatsAppMessage.external_message_id == str(msg_id)
                     ).first()
 
                     if not existing:
@@ -346,13 +364,15 @@ class MrLadWhatsAppClient:
                         new_inbound_messages += 1
                         try:
                             # Process incoming message to run AI response
-                            process_incoming_whatsapp_message(
+                            in_msg, out_msg, handoff = process_incoming_whatsapp_message(
                                 db=db,
                                 phone_number=clean_digits,
                                 message_text=text,
                                 sender_name=sender_name,
-                                raw_webhook_payload={"source": "mr_lad_poll", "message": m},
                             )
+                            if in_msg:
+                                in_msg.external_message_id = str(msg_id)
+                                db.commit()
                         except Exception as proc_err:
                             logger.error(f"[Mr LAD Sync] Error processing incoming message: {proc_err}")
 

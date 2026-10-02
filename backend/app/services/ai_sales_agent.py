@@ -485,8 +485,9 @@ Do NOT output intent, analysis, reasoning, JSON, markdown markers, or quotes.
 ONLY return the exact message ready to send to the business owner."""
 
     # 1. LLM Powered Response (OpenAI API / Open Chat AI)
+    use_rule_based = getattr(settings, 'USE_RULE_BASED_CHAT', False)
     openai_key = getattr(settings, 'OPENAI_API_KEY', '')
-    if openai_key and openai_key.strip():
+    if not use_rule_based and openai_key and openai_key.strip():
         try:
             base_url = getattr(settings, 'OPENAI_BASE_URL', 'https://api.openai.com/v1').rstrip('/')
             model_name = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
@@ -516,7 +517,7 @@ ONLY return the exact message ready to send to the business owner."""
             print(f"OpenAI API sales response exception: {e}. Trying Gemini or Rule fallback.")
 
     # 2. LLM Powered Response (Google Gemini API)
-    if settings.GEMINI_API_KEY and settings.GEMINI_API_KEY.strip():
+    if not use_rule_based and settings.GEMINI_API_KEY and settings.GEMINI_API_KEY.strip():
         try:
             genai.configure(api_key=settings.GEMINI_API_KEY.strip())
             model = genai.GenerativeModel(

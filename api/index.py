@@ -20,4 +20,5 @@ if os.environ.get("VERCEL"):
         except Exception as e:
             print(f"Error copying SQLite db to /tmp: {e}")
 
+# pyrefly: ignore [missing-import]
 from app.main import app

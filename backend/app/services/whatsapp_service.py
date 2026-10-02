@@ -808,7 +808,7 @@ def send_manual_operator_message(
     db: Session,
     conversation_id: int,
     message_text: str,
-    operator_name: str = "Lexonity Team",
+    operator_name: str = "Lexon IT Team",
 ) -> WhatsAppMessage:
     """
     Sends a manual operator message to the shop owner
@@ -1397,6 +1397,7 @@ def get_comprehensive_whatsapp_analytics(
             in (
                 WhatsAppSenderType.MANUAL_OPERATOR,
                 WhatsAppSenderType.HUMAN,
+                WhatsAppSenderType.LEXON_IT_TEAM,
                 WhatsAppSenderType.LEXONITY_TEAM,
             )
         )
@@ -1689,6 +1690,7 @@ def get_comprehensive_whatsapp_analytics(
                 in (
                     WhatsAppSenderType.MANUAL_OPERATOR,
                     WhatsAppSenderType.HUMAN,
+                    WhatsAppSenderType.LEXON_IT_TEAM,
                     WhatsAppSenderType.LEXONITY_TEAM,
                 )
             )
@@ -2051,7 +2053,7 @@ def track_whatsapp_outbound_contact(
 
         sender_type=WhatsAppSenderType.HUMAN,
 
-        sender_name="Lexonity Agent",
+        sender_name="Lexon IT Agent",
 
         message_body=body,
 

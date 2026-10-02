@@ -43,7 +43,7 @@ services:
       - key: LAD_API_TOKEN
         sync: false
       - key: WHATSAPP_DEFAULT_TEMPLATE_NAME
-        value: easybillbro_bill_generated
+        value: signup_otp
       - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
         value: shoppresence_whatsapp_webhook_token_123
       - key: WHATSAPP_API_VERSION

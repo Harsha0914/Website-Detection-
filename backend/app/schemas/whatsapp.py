@@ -45,7 +45,7 @@ class WhatsAppConversationDetail(WhatsAppConversationOut):
 
 class ManualMessageCreate(BaseModel):
     message: str
-    operator_name: Optional[str] = "Lexonity Team"
+    operator_name: Optional[str] = "Lexon IT Team"
 
 
 class ToggleAISchema(BaseModel):
