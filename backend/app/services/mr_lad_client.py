@@ -109,28 +109,39 @@ class MrLadWhatsAppClient:
         return None
 
     @classmethod
-    def _resolve_flyer_path(cls) -> Optional[str]:
+    def _resolve_flyer_paths(cls) -> Dict[str, Optional[str]]:
         import os
-        candidates = [
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "static", "images", "easybillbro-flyer.jpg")),
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "static", "images", "easybillbro-flyer.png")),
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "frontend", "public", "images", "easybillbro-flyer.jpg")),
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "frontend", "public", "images", "easybillbro-flyer.png")),
-            os.path.abspath("static/images/easybillbro-flyer.jpg"),
-            os.path.abspath("static/images/easybillbro-flyer.png"),
-            os.path.abspath("backend/static/images/easybillbro-flyer.jpg"),
-            os.path.abspath("backend/static/images/easybillbro-flyer.png"),
-            os.path.abspath("frontend/public/images/easybillbro-flyer.jpg"),
-            os.path.abspath("frontend/public/images/easybillbro-flyer.png"),
-            "c:/Shop/backend/static/images/easybillbro-flyer.jpg",
-            "c:/Shop/backend/static/images/easybillbro-flyer.png",
-            "c:/Shop/frontend/public/images/easybillbro-flyer.jpg",
-            "c:/Shop/frontend/public/images/easybillbro-flyer.png",
-        ]
-        for c in candidates:
-            if os.path.exists(c):
-                return c
-        return None
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        root_dir = os.path.abspath(os.path.join(base_dir, ".."))
+
+        def find_img(filename: str) -> Optional[str]:
+            candidates = [
+                os.path.join(base_dir, "static", "images", filename),
+                os.path.join(root_dir, "backend", "static", "images", filename),
+                os.path.join(root_dir, "frontend", "public", "images", filename),
+                os.path.abspath(f"static/images/{filename}"),
+                os.path.abspath(f"backend/static/images/{filename}"),
+                os.path.abspath(f"frontend/public/images/{filename}"),
+                f"c:/Shop/backend/static/images/{filename}",
+                f"c:/Shop/frontend/public/images/{filename}",
+            ]
+            for c in candidates:
+                if os.path.exists(c):
+                    return c
+            return None
+
+        easybillbro = find_img("easybillbro-flyer.jpg") or find_img("easybillbro-flyer.png")
+        lexonit = find_img("lexonit-flyer.jpg") or find_img("template_header_sample.jpg")
+
+        return {
+            "easybillbro": easybillbro,
+            "lexonit": lexonit,
+        }
+
+    @classmethod
+    def _resolve_flyer_path(cls) -> Optional[str]:
+        paths = cls._resolve_flyer_paths()
+        return paths.get("easybillbro") or paths.get("lexonit")
 
     @classmethod
     def send_image_message(cls, conv_id: str, img_path: str, caption: str = "") -> Tuple[bool, str, dict]:
@@ -174,6 +185,37 @@ class MrLadWhatsAppClient:
             return False, str(e), {}
 
     @classmethod
+    def sync_to_admin(cls, message: str, shop_name: str, shop_phone: str, send_flyers: bool = True):
+        """
+        Synchronizes the dispatched chat and marketing flyers to the admin's WhatsApp Business
+        account (+917780181920) in Mr LAD so both the WA account and Mr LAD dashboard are up to date.
+        """
+        admin_phone = "+917780181920"
+        try:
+            token, _ = cls.get_token()
+            if not token:
+                return
+            admin_conv_id = cls._find_conversation_id(admin_phone, token)
+            if not admin_conv_id:
+                return
+
+            api_base = settings.LAD_API_BASE_URL.rstrip("/")
+            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+            summary = f"📢 [Outbound to {shop_name} ({shop_phone})]:\n\n{message}"
+            requests.post(f"{api_base}/api/conversations/{admin_conv_id}/messages", headers=headers, json={"content": summary}, timeout=10)
+
+            if send_flyers:
+                flyers = cls._resolve_flyer_paths()
+                if flyers.get("easybillbro"):
+                    time.sleep(0.5)
+                    cls.send_image_message(admin_conv_id, flyers["easybillbro"], f"EasyBillBro Restaurant Billing Flyer -> Sent to {shop_name}")
+                if flyers.get("lexonit"):
+                    time.sleep(0.5)
+                    cls.send_image_message(admin_conv_id, flyers["lexonit"], f"Lexon IT Website Development Flyer -> Sent to {shop_name}")
+        except Exception as sync_err:
+            logger.warning(f"[Admin WhatsApp Sync Note] {sync_err}")
+
+    @classmethod
     def send_message(
         cls,
         to_phone: str,
@@ -183,17 +225,20 @@ class MrLadWhatsAppClient:
         language_code: str = "en_US",
         template_parameters: Optional[List[str]] = None,
         send_flyer: bool = True,
+        sync_admin_copy: bool = True,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Sends an outbound WhatsApp message via Mr LAD API.
 
         Strategy:
-        - For EXISTING conversations: sends free-text directly via
-          POST /api/conversations/{id}/messages  {"content": "..."}
-          No template needed — works within any active conversation.
+        - For EXISTING conversations (e.g. +917780181920): sends free-text directly via
+          POST /api/conversations/{id}/messages {"content": "..."}
+          No template needed — works immediately and avoids Meta #100 parameter errors.
         - For NEW contacts: uses POST /api/conversations/send-template-to-members
           to open the conversation (template required by Meta for first contact),
-          then immediately sends the real custom text as a follow-up free-text message.
+          then sends the real custom text as a follow-up free-text message.
+        - Sends BOTH marketing flyers (EasyBillBro Restaurant Billing + Lexon IT Website Development).
+        - Automatically syncs a copy to the admin WhatsApp Business account (+917780181920).
         """
         recipient = cls._clean_phone(to_phone)
         display_name = recipient_name or "Shop Owner"
@@ -260,6 +305,33 @@ class MrLadWhatsAppClient:
             logger.error(f"[Mr LAD API Free-text Error {res.status_code}] {err}")
             return False, str(err), err_data
 
+        def _send_both_flyers(conv_id: str):
+            """Dispatches BOTH marketing flyers: EasyBillBro Restaurant Billing + Lexon IT Website Pitch"""
+            flyers = cls._resolve_flyer_paths()
+            # 1. EasyBillBro flyer
+            if flyers.get("easybillbro"):
+                try:
+                    time.sleep(0.6)
+                    cls.send_image_message(
+                        conv_id=conv_id,
+                        img_path=flyers["easybillbro"],
+                        caption="EasyBillBro - Restaurant Billing & POS"
+                    )
+                except Exception as e1:
+                    logger.warning(f"[Flyer 1 Send Error] {e1}")
+
+            # 2. Lexon IT flyer
+            if flyers.get("lexonit"):
+                try:
+                    time.sleep(0.6)
+                    cls.send_image_message(
+                        conv_id=conv_id,
+                        img_path=flyers["lexonit"],
+                        caption="Lexon IT - Professional Website Development & Digital Growth"
+                    )
+                except Exception as e2:
+                    logger.warning(f"[Flyer 2 Send Error] {e2}")
+
         # Build the actual message to show the shop owner
         outbound_message = text_body or (
             f"Hello {display_name},\n\n"
@@ -269,13 +341,32 @@ class MrLadWhatsAppClient:
         )
 
         try:
+            # ── PRIORITY CHECK: Existing conversation in Mr LAD ────────────
+            # If conversation already exists (e.g. admin +917780181920 or prior contacted shop),
+            # dispatch directly as free-text into the active thread. This avoids Meta #100 parameter errors!
+            existing_conv_id = cls._find_conversation_id(recipient, token)
+            if existing_conv_id:
+                logger.info(f"[Mr LAD API] Found active conversation {existing_conv_id} for {recipient}. Dispatching free-text directly.")
+                ft_ok, ft_id, ft_data = _send_freetext(existing_conv_id, outbound_message)
+                if send_flyer:
+                    _send_both_flyers(existing_conv_id)
+
+                if sync_admin_copy and not recipient.endswith("7780181920"):
+                    cls.sync_to_admin(outbound_message, display_name, recipient, send_flyers=send_flyer)
+
+                return True, ft_id, {
+                    "success": True,
+                    "conversation_id": existing_conv_id,
+                    "message_id": ft_id,
+                    "data": ft_data,
+                    "mode": "existing_thread"
+                }
+
+            # ── NEW CONTACT: Dispatch via send-template-to-members ─────────
             if not language_code or language_code == "en":
                 language_code = "en_US"
 
-            # ── Dispatch via send-template-to-members ──────────────────────────────────
-            # Mr LAD API delivers approved 'chosen_template' (lexon_official_pitch).
-            # Parameters for lexon_official_pitch: {{1}} = display_name, {{2}} = display_name.
-            logger.info(f"[Mr LAD API] Dispatching to {recipient} with template '{chosen_template}'...")
+            logger.info(f"[Mr LAD API] Dispatching new contact template to {recipient} with template '{chosen_template}'...")
             if template_parameters is not None:
                 params_list = template_parameters
             elif chosen_template == "lexon_official_pitch":
@@ -296,12 +387,14 @@ class MrLadWhatsAppClient:
             }
             res = _post(f"{api_base}/api/conversations/send-template-to-members", init_payload)
             init_data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
-            if res.status_code != 200 or not (init_data.get("success") or init_data.get("sent", 0) > 0):
-                err_text = init_data.get("error") or init_data.get("message") or res.text
+
+            results = init_data.get("results", [])
+            first_status = results[0].get("status") if results else ""
+            if res.status_code != 200 or first_status == "failed":
+                err_text = (results[0].get("error") if results else None) or init_data.get("error") or init_data.get("message") or res.text
                 logger.error(f"[Mr LAD API Send Error {res.status_code}] {err_text}")
                 return False, f"HTTP {res.status_code}: {err_text}", init_data
 
-            results = init_data.get("results", [])
             conv_id = (results[0].get("conversation_id") or "") if results else ""
             if not conv_id:
                 time.sleep(0.5)
@@ -312,7 +405,7 @@ class MrLadWhatsAppClient:
                 msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
             logger.info(f"[Mr LAD API] Successfully sent template to {recipient} (Conv: {conv_id}, ID: {msg_id})")
 
-            # 1. Follow up with free-text message in the conversation thread so the full message body is always explicitly visible in chat
+            # 1. Follow up with free-text message in the conversation thread
             if conv_id and outbound_message:
                 try:
                     time.sleep(0.5)
@@ -320,23 +413,13 @@ class MrLadWhatsAppClient:
                 except Exception as ft_err:
                     logger.warning(f"[Mr LAD API Follow-up Note] {ft_err}")
 
-            # 2. Follow up with EasyBillBro Restaurant Billing flyer image so BOTH chat and flyer image are sent
+            # 2. Follow up with BOTH marketing flyers (EasyBillBro + Lexon IT)
             if send_flyer and conv_id:
-                flyer_path = cls._resolve_flyer_path()
-                if flyer_path:
-                    try:
-                        time.sleep(1.0)
-                        img_ok, img_id, _ = cls.send_image_message(
-                            conv_id=conv_id,
-                            img_path=flyer_path,
-                            caption="EasyBillBro - Restaurant Billing & POS"
-                        )
-                        if img_ok:
-                            logger.info(f"[Mr LAD API] Successfully sent flyer image to {recipient} in conv {conv_id} ({img_id})")
-                        else:
-                            logger.warning(f"[Mr LAD API Flyer Image Note] {img_id}")
-                    except Exception as img_err:
-                        logger.warning(f"[Mr LAD API Follow-up Image Exception] {img_err}")
+                _send_both_flyers(conv_id)
+
+            # 3. Synchronize copy to admin WhatsApp Business account
+            if sync_admin_copy and not recipient.endswith("7780181920"):
+                cls.sync_to_admin(outbound_message, display_name, recipient, send_flyers=send_flyer)
 
             return True, msg_id, init_data
 

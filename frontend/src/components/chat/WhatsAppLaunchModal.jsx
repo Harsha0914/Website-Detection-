@@ -57,16 +57,26 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
   };
 
 
-  // Direct WhatsApp API Send (dispatches directly from website to shop owner or target phone)
-  const handleDirectSendAPI = async (overrideNum = null) => {
-    const numToUse = overrideNum || activePhone;
-    if (!message.trim() || !numToUse) return;
+  // Direct WhatsApp API Send (dispatches directly from website to shop owner and/or 7780181920)
+  const handleDirectSendAPI = async () => {
+    if (!message.trim()) return;
     setDirectSending(true);
     try {
-      await sendDirectWhatsAppPitch({
-        ...business,
-        phone: numToUse,
-      }, message);
+      if (targetType === 'my_phone' || targetType === 'both') {
+        await sendDirectWhatsAppPitch({
+          ...business,
+          name: `${shopName} [Direct Pitch]`,
+          phone: '917780181920',
+        }, message);
+      }
+      if (targetType === 'shop' || targetType === 'both') {
+        if (shopPhoneDigits && !shopPhoneDigits.endsWith('7780181920')) {
+          await sendDirectWhatsAppPitch({
+            ...business,
+            phone: shopPhoneDigits,
+          }, message);
+        }
+      }
       setDirectSuccess(true);
       setStep(2);
     } catch (err) {
@@ -78,9 +88,9 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
   };
 
   // Direct WhatsApp Launch (opens web/app with pre-filled message directly so chat is visible in WhatsApp)
-  const handleDirectLaunchWhatsApp = (mode = 'web', overrideNum = null) => {
+  const handleDirectLaunchWhatsApp = (mode = 'web') => {
     if (!message.trim()) return;
-    const numToUse = overrideNum || activePhone;
+    const numToUse = targetType === 'my_phone' ? '917780181920' : (shopPhoneDigits || '917780181920');
     launchDirectWhatsAppChat(business, message, mode, numToUse);
     setDirectSuccess(true);
     setStep(2);
@@ -283,14 +293,60 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
 
 
               {/* Recipient Target Selector */}
-              {/* Recipient Target Shop */}
               <div style={{ padding: '12px 14px 4px' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
-                  Recipient
+                  Target Destination
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setTargetType('both')}
+                    style={{
+                      flex: 1, padding: '7px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                      border: targetType === 'both' ? '2px solid #059669' : '1px solid #e2e8f0',
+                      background: targetType === 'both' ? '#ecfdf5' : '#f8fafc',
+                      color: targetType === 'both' ? '#047857' : '#64748b',
+                      cursor: 'pointer', transition: 'all 0.15s'
+                    }}
+                  >
+                    🚀 Both (Shop & 7780181920)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTargetType('my_phone')}
+                    style={{
+                      flex: 1, padding: '7px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                      border: targetType === 'my_phone' ? '2px solid #059669' : '1px solid #e2e8f0',
+                      background: targetType === 'my_phone' ? '#ecfdf5' : '#f8fafc',
+                      color: targetType === 'my_phone' ? '#047857' : '#64748b',
+                      cursor: 'pointer', transition: 'all 0.15s'
+                    }}
+                  >
+                    📱 7780181920 WA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTargetType('shop')}
+                    style={{
+                      flex: 1, padding: '7px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                      border: targetType === 'shop' ? '2px solid #059669' : '1px solid #e2e8f0',
+                      background: targetType === 'shop' ? '#ecfdf5' : '#f8fafc',
+                      color: targetType === 'shop' ? '#047857' : '#64748b',
+                      cursor: 'pointer', transition: 'all 0.15s'
+                    }}
+                  >
+                    🏪 Shop Only
+                  </button>
                 </div>
                 <div style={{ padding: '8px 12px', borderRadius: 12, fontSize: 12, fontWeight: 700, background: '#ecfdf5', border: '1px solid #10b981', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>🏪 {shopName}</span>
-                  <span style={{ fontFamily: 'monospace' }}>{phoneDisplay}</span>
+                  <span>
+                    {targetType === 'both' && `🏪 ${shopName} & 📱 +91 77801 81920`}
+                    {targetType === 'my_phone' && `📱 WA Business Account (+91 77801 81920)`}
+                    {targetType === 'shop' && `🏪 ${shopName}`}
+                  </span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                    {targetType === 'my_phone' ? '+917780181920' : phoneDisplay}
+                  </span>
                 </div>
               </div>
 
@@ -309,8 +365,8 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                   <textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    rows={5}
-                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 13, lineHeight: 1.65, color: '#1e293b', fontFamily: 'system-ui,sans-serif', boxSizing: 'border-box' }}
+                    rows={4}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 12.5, lineHeight: 1.6, color: '#1e293b', fontFamily: 'system-ui,sans-serif', boxSizing: 'border-box' }}
                   />
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
                     <span style={{ fontSize: 10, color: '#94a3b8' }}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -318,26 +374,44 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Attached Flyer Preview (Sent with chat) */}
+              {/* Attached Marketing Flyers (Both Images Auto-Sent With Chat) */}
               <div style={{ padding: '0 14px 12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#047857', textTransform: 'uppercase', letterSpacing: '.07em', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    📎 Attached Marketing Flyer
+                    📎 2 Attached Marketing Flyers
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: 10, border: '1px solid #a7f3d0' }}>
-                    Auto-sent with chat
+                    Both auto-sent with chat
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '10px 12px' }}>
-                  <img
-                    src="/images/easybillbro-flyer.jpg"
-                    alt="EasyBillBro Restaurant Billing & POS Flyer"
-                    style={{ width: 52, height: 68, objectFit: 'cover', borderRadius: 8, border: '1px solid #cbd5e1', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}
-                  />
-                  <div>
-                    <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0f172a' }}>EasyBillBro Restaurant Billing & POS</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Plans: Basic (Rs 5k), Advanced (Rs 7k), Pro (Rs 10k)</div>
-                    <div style={{ fontSize: 10.5, color: '#059669', fontWeight: 600, marginTop: 3 }}>✓ High-res image dispatched to shop WhatsApp</div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {/* Flyer 1: EasyBillBro */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '8px' }}>
+                    <img
+                      src="/images/easybillbro-flyer.jpg"
+                      alt="EasyBillBro Restaurant Billing Flyer"
+                      style={{ width: 40, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>EasyBillBro</div>
+                      <div style={{ fontSize: 10, color: '#64748b' }}>Billing & POS</div>
+                      <div style={{ fontSize: 9.5, color: '#059669', fontWeight: 700, marginTop: 2 }}>✓ Image 1</div>
+                    </div>
+                  </div>
+
+                  {/* Flyer 2: Lexon IT */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '8px' }}>
+                    <img
+                      src="/images/lexonit-flyer.jpg"
+                      alt="Lexon IT Website Development Flyer"
+                      style={{ width: 40, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Lexon IT</div>
+                      <div style={{ fontSize: 10, color: '#64748b' }}>Website & App</div>
+                      <div style={{ fontSize: 9.5, color: '#059669', fontWeight: 700, marginTop: 2 }}>✓ Image 2</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -353,26 +427,26 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
               <button
                 type='button'
                 onClick={() => handleDirectSendAPI()}
-                disabled={!activePhone || !message.trim() || directSending}
+                disabled={!message.trim() || directSending}
                 style={{
                   width: '100%', padding: '14px',
-                  background: !activePhone || !message.trim() ? '#94a3b8' : 'linear-gradient(135deg,#059669,#0d9488)',
-                  borderRadius: 16, color: '#fff', fontWeight: 800, fontSize: 14.5,
-                  border: 'none', cursor: activePhone && message.trim() && !directSending ? 'pointer' : 'not-allowed',
+                  background: !message.trim() ? '#94a3b8' : 'linear-gradient(135deg,#059669,#0d9488)',
+                  borderRadius: 16, color: '#fff', fontWeight: 800, fontSize: 14,
+                  border: 'none', cursor: message.trim() && !directSending ? 'pointer' : 'not-allowed',
                   boxShadow: '0 4px 16px rgba(16,185,129,.35)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
-                title="Dispatches outreach pitch and EasyBillBro flyer directly via WhatsApp API"
+                title="Dispatches chat pitch and both marketing flyers directly via WhatsApp API"
               >
                 {directSending ? (
                   <>
                     <Loader2 size={18} className="animate-spin text-white" />
-                    <span>Sending Pitch & Flyer via WhatsApp...</span>
+                    <span>Sending Pitch & Both Flyers via WhatsApp...</span>
                   </>
                 ) : (
                   <>
                     <Zap size={18} fill="#fff" />
-                    <span>⚡ Send Pitch + Flyer to WhatsApp ({activePhone ? '+' + activePhone : 'Shop'})</span>
+                    <span>⚡ Send Pitch + 2 Flyers to WhatsApp ({targetType === 'both' ? 'Both' : (targetType === 'my_phone' ? '+917780181920' : (activePhone ? '+' + activePhone : 'Shop'))})</span>
                   </>
                 )}
               </button>
@@ -381,11 +455,11 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                 <button
                   type='button'
                   onClick={() => handleDirectLaunchWhatsApp('web')}
-                  disabled={!activePhone || !message.trim()}
+                  disabled={!message.trim()}
                   style={{
                     flex: 1, padding: '9px 10px', fontSize: 11.5, fontWeight: 700,
                     color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                    borderRadius: 12, cursor: activePhone && message.trim() ? 'pointer' : 'not-allowed',
+                    borderRadius: 12, cursor: message.trim() ? 'pointer' : 'not-allowed',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                   }}
                   title="Open in WhatsApp Web"

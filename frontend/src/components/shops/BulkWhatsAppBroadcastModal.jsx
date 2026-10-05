@@ -420,19 +420,36 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
                 </div>
               </div>
 
-              {/* Attached Flyer Info */}
-              <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl">
-                <img
-                  src="/images/easybillbro-flyer.jpg"
-                  alt="EasyBillBro Flyer"
-                  className="w-10 h-13 object-cover rounded-lg border border-emerald-300 dark:border-emerald-700 shadow-xs"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
-                    📎 Attached Flyer: EasyBillBro Restaurant Billing & POS
+              {/* Attached Flyers Info (Both Images) */}
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl space-y-2">
+                <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center justify-between">
+                  <span>📎 2 Attached Marketing Flyers</span>
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full">
+                    Both Auto-Sent With Chat
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2 p-1.5 bg-white dark:bg-slate-900/80 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
+                    <img
+                      src="/images/easybillbro-flyer.jpg"
+                      alt="EasyBillBro Flyer"
+                      className="w-8 h-11 object-cover rounded border border-slate-200 dark:border-slate-700"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold text-slate-900 dark:text-white truncate">EasyBillBro</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Restaurant POS</div>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                    This marketing flyer will be automatically delivered alongside the chat message to all selected shops.
+                  <div className="flex items-center gap-2 p-1.5 bg-white dark:bg-slate-900/80 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
+                    <img
+                      src="/images/lexonit-flyer.jpg"
+                      alt="Lexon IT Flyer"
+                      className="w-8 h-11 object-cover rounded border border-slate-200 dark:border-slate-700"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold text-slate-900 dark:text-white truncate">Lexon IT</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Website & App</div>
+                    </div>
                   </div>
                 </div>
               </div>
