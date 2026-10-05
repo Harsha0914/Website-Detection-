@@ -237,7 +237,7 @@ export async function testWhatsAppCloudMessage(to_phone, message) {
   return res.data;
 }
 
-export async function broadcastWhatsAppToAllShops({ shops, customMessage, autoAIEnabled = true }) {
+export async function broadcastWhatsAppToAllShops({ shops, customMessage, autoAIEnabled = true, includeFlyer = true }) {
   const res = await api.post('/ai-whatsapp/broadcast-all', {
     shops: shops.map(s => ({
       business_id: s.id || s.business_id,
@@ -249,6 +249,7 @@ export async function broadcastWhatsAppToAllShops({ shops, customMessage, autoAI
     })),
     custom_message: customMessage,
     auto_ai_enabled: autoAIEnabled,
+    include_flyer: includeFlyer,
   });
 
   if (typeof window !== 'undefined') {
@@ -265,9 +266,9 @@ export async function broadcastWhatsAppToAllShops({ shops, customMessage, autoAI
 
 /**
  * Directly sends an outreach pitch or message to a specific shop person via Lexon IT WhatsApp API.
- * Dispatches directly without requiring manual opening of WhatsApp.
+ * Dispatches directly along with the EasyBillBro Restaurant Billing flyer image.
  */
-export async function sendDirectWhatsAppPitch(business, customMessage = null, overridePhone = null) {
+export async function sendDirectWhatsAppPitch(business, customMessage = null, overridePhone = null, includeFlyer = true) {
   const shopName = business?.name || business?.shop_name || 'Local Shop';
   const shopGeneratedPhone = formatPhoneNumber(business?.phone || business?.phone_number, shopName, business?.id || business?.external_place_id || '');
   const rawPhone = overridePhone || business?.phone || business?.phone_number || shopGeneratedPhone;
@@ -298,6 +299,7 @@ export async function sendDirectWhatsAppPitch(business, customMessage = null, ov
     shops: shopsPayload,
     custom_message: messageToSend,
     auto_ai_enabled: true,
+    include_flyer: includeFlyer,
   });
 
   const firstResult = res.data?.results?.[0];

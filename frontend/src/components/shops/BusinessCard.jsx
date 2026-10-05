@@ -260,24 +260,24 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
               }`}
               title={
                 pitchSent
-                  ? `WhatsApp message sent to ${business.name} (${displayPhone})!`
-                  : `Send WhatsApp pitch directly to ${business.name} (${displayPhone})`
+                  ? `WhatsApp pitch & EasyBillBro flyer sent to ${business.name} (${displayPhone})!`
+                  : `Send WhatsApp pitch + EasyBillBro restaurant flyer directly to ${business.name} (${displayPhone})`
               }
             >
               {isSendingPitch ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
-                  <span>Sending...</span>
+                  <span>Sending Pitch & Flyer...</span>
                 </>
               ) : pitchSent ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                  <span>✓ Pitch Sent!</span>
+                  <span>✓ Pitch & Flyer Sent!</span>
                 </>
               ) : (
                 <>
                   <MessageCircle className="w-3.5 h-3.5 text-emerald-100" />
-                  <span>⚡ Send WhatsApp Pitch</span>
+                  <span>⚡ Send Pitch + Flyer</span>
                 </>
               )}
             </button>
@@ -293,22 +293,22 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
                   ? 'bg-emerald-700 cursor-wait'
                   : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/20'
               }`}
-              title={`Auto-send WhatsApp pitch to ${business.name} from +91 77801 81920`}
+              title={`Auto-send WhatsApp pitch & EasyBillBro flyer to ${business.name} from +91 77801 81920`}
             >
               {isSendingPitch ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
-                  <span>Sending...</span>
+                  <span>Sending Pitch & Flyer...</span>
                 </>
               ) : pitchSent ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                  <span>✓ Sent!</span>
+                  <span>✓ Pitch & Flyer Sent!</span>
                 </>
               ) : (
                 <>
                   <MessageCircle className="w-3.5 h-3.5 text-emerald-100 animate-pulse" />
-                  <span>⚡ WhatsApp</span>
+                  <span>⚡ WhatsApp + Flyer</span>
                 </>
               )}
             </button>

@@ -44,7 +44,7 @@ export default function WhatsAppSentConfirmToast() {
             </div>
             <div className='flex-1 min-w-0'>
               <div className='text-xs font-black text-emerald-400 flex items-center gap-1.5'>
-                <span>⚡ WhatsApp Message Sent Directly!</span>
+                <span>⚡ WhatsApp Pitch & Flyer Sent Directly!</span>
               </div>
               <div className='text-sm font-bold text-white truncate mt-0.5'>
                 {directSentData.shopName}
@@ -53,7 +53,7 @@ export default function WhatsAppSentConfirmToast() {
                 +{directSentData.phone}
               </div>
               <div className='text-xs text-emerald-300/90 font-medium mt-1 leading-snug'>
-                Pitch delivered directly to shop owner via WhatsApp Cloud API without manual steps.
+                Personalized pitch & EasyBillBro flyer delivered directly to shop owner via WhatsApp.
               </div>
 
               {/* Direct links to view the live chat thread */}

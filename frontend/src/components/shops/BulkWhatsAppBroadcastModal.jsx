@@ -420,13 +420,30 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
                 </div>
               </div>
 
+              {/* Attached Flyer Info */}
+              <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl">
+                <img
+                  src="/images/easybillbro-flyer.jpg"
+                  alt="EasyBillBro Flyer"
+                  className="w-10 h-13 object-cover rounded-lg border border-emerald-300 dark:border-emerald-700 shadow-xs"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                    📎 Attached Flyer: EasyBillBro Restaurant Billing & POS
+                  </div>
+                  <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                    This marketing flyer will be automatically delivered alongside the chat message to all selected shops.
+                  </div>
+                </div>
+              </div>
+
               {/* Progress bar during sending */}
               {isSending && (
                 <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2 animate-in fade-in">
                   <div className="flex items-center justify-between text-xs font-bold text-emerald-800 dark:text-emerald-300">
                     <span className="flex items-center gap-1.5">
                       <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                      <span>Broadcasting AI Pitch: {currentSendingName}...</span>
+                      <span>Broadcasting AI Pitch & Flyer: {currentSendingName}...</span>
                     </span>
                     <span>{progress}%</span>
                   </div>
@@ -463,12 +480,12 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
               {isSending ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Sending to {targetShops.length} Shops...</span>
+                  <span>Sending Pitch & Flyer to {targetShops.length} Shops...</span>
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  <span>Send AI WhatsApp to All ({targetShops.length} Shops)</span>
+                  <span>Send AI Pitch + Flyer to All ({targetShops.length} Shops)</span>
                 </>
               )}
             </button>

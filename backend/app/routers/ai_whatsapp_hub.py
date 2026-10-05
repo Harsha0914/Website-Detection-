@@ -51,6 +51,7 @@ class BulkWhatsAppBroadcastSchema(BaseModel):
     custom_message: Optional[str] = None
     auto_ai_enabled: Optional[bool] = True
     operator_name: Optional[str] = "Lexon IT AI Specialist"
+    include_flyer: Optional[bool] = True
 
 class MessageSendSchema(BaseModel):
     message_text: str
@@ -577,6 +578,7 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
             # 2. Dispatch via Meta WhatsApp Cloud API client
             whatsapp_sent = False
             w_res = None
+            should_send_flyer = bool(getattr(payload, "include_flyer", True))
             try:
                 whatsapp_sent, w_res, _ = WhatsAppCloudClient.send_text(
                     db=db,
@@ -584,12 +586,13 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
                     text_body=personalized_msg,
                     preview_url=True,
                     recipient_name=s_name,
+                    send_flyer=should_send_flyer,
                 )
             except Exception as w_err:
                 whatsapp_sent = False
                 w_res = str(w_err)
 
-            # 3. Create outbound message record
+            # 3. Create outbound message record for text pitch
             outbound_msg = WhatsAppMessage(
                 conversation_id=conv.id,
                 direction=WhatsAppDirection.OUTBOUND,
@@ -602,6 +605,21 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
                 created_at=datetime.utcnow(),
             )
             db.add(outbound_msg)
+
+            # 4. If flyer was sent, also record outbound flyer image message in conversation
+            if whatsapp_sent and should_send_flyer:
+                outbound_flyer_msg = WhatsAppMessage(
+                    conversation_id=conv.id,
+                    direction=WhatsAppDirection.OUTBOUND,
+                    sender_type=WhatsAppSenderType.AI_BOT if payload.auto_ai_enabled else WhatsAppSenderType.MANUAL_OPERATOR,
+                    sender_name=payload.operator_name or "Lexon IT AI Assistant",
+                    message_body="[EasyBillBro Restaurant Billing & POS Flyer Attached]\nhttps://easybillbro.com",
+                    ai_generated=bool(payload.auto_ai_enabled),
+                    status="sent",
+                    is_read=True,
+                    created_at=datetime.utcnow(),
+                )
+                db.add(outbound_flyer_msg)
 
             # 4. Log AI outreach activity
             if payload.auto_ai_enabled:

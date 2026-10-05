@@ -113,11 +113,19 @@ class MrLadWhatsAppClient:
         import os
         candidates = [
             os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "static", "images", "easybillbro-flyer.jpg")),
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "static", "images", "easybillbro-flyer.png")),
             os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "frontend", "public", "images", "easybillbro-flyer.jpg")),
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "frontend", "public", "images", "easybillbro-flyer.png")),
+            os.path.abspath("static/images/easybillbro-flyer.jpg"),
+            os.path.abspath("static/images/easybillbro-flyer.png"),
             os.path.abspath("backend/static/images/easybillbro-flyer.jpg"),
+            os.path.abspath("backend/static/images/easybillbro-flyer.png"),
             os.path.abspath("frontend/public/images/easybillbro-flyer.jpg"),
+            os.path.abspath("frontend/public/images/easybillbro-flyer.png"),
             "c:/Shop/backend/static/images/easybillbro-flyer.jpg",
+            "c:/Shop/backend/static/images/easybillbro-flyer.png",
             "c:/Shop/frontend/public/images/easybillbro-flyer.jpg",
+            "c:/Shop/frontend/public/images/easybillbro-flyer.png",
         ]
         for c in candidates:
             if os.path.exists(c):
@@ -135,13 +143,14 @@ class MrLadWhatsAppClient:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
+        content_type = "image/png" if img_path.lower().endswith(".png") else "image/jpeg"
         try:
             with open(img_path, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode("utf-8")
             payload = {
                 "type": "image",
                 "file_base64": b64,
-                "content_type": "image/jpeg",
+                "content_type": content_type,
                 "caption": caption
             }
             res = requests.post(f"{api_base}/api/conversations/{conv_id}/messages", headers=headers, json=payload, timeout=20)
@@ -173,6 +182,7 @@ class MrLadWhatsAppClient:
         template_name: Optional[str] = None,
         language_code: str = "en_US",
         template_parameters: Optional[List[str]] = None,
+        send_flyer: bool = True,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Sends an outbound WhatsApp message via Mr LAD API.
@@ -293,17 +303,40 @@ class MrLadWhatsAppClient:
 
             results = init_data.get("results", [])
             conv_id = (results[0].get("conversation_id") or "") if results else ""
+            if not conv_id:
+                time.sleep(0.5)
+                conv_id = cls._find_conversation_id(recipient, token) or ""
+
             msg_id = (results[0].get("message_id") or results[0].get("id") or "") if results else ""
             if not msg_id:
                 msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
             logger.info(f"[Mr LAD API] Successfully sent template to {recipient} (Conv: {conv_id}, ID: {msg_id})")
 
-            # Follow up with free-text message in the conversation thread so the full message body is always explicitly visible in chat
+            # 1. Follow up with free-text message in the conversation thread so the full message body is always explicitly visible in chat
             if conv_id and outbound_message:
                 try:
+                    time.sleep(0.5)
                     _send_freetext(conv_id, outbound_message)
                 except Exception as ft_err:
                     logger.warning(f"[Mr LAD API Follow-up Note] {ft_err}")
+
+            # 2. Follow up with EasyBillBro Restaurant Billing flyer image so BOTH chat and flyer image are sent
+            if send_flyer and conv_id:
+                flyer_path = cls._resolve_flyer_path()
+                if flyer_path:
+                    try:
+                        time.sleep(1.0)
+                        img_ok, img_id, _ = cls.send_image_message(
+                            conv_id=conv_id,
+                            img_path=flyer_path,
+                            caption="EasyBillBro - Restaurant Billing & POS"
+                        )
+                        if img_ok:
+                            logger.info(f"[Mr LAD API] Successfully sent flyer image to {recipient} in conv {conv_id} ({img_id})")
+                        else:
+                            logger.warning(f"[Mr LAD API Flyer Image Note] {img_id}")
+                    except Exception as img_err:
+                        logger.warning(f"[Mr LAD API Follow-up Image Exception] {img_err}")
 
             return True, msg_id, init_data
 

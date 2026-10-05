@@ -229,10 +229,10 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                 <Check size={32} strokeWidth={2.5} />
               </div>
               <h4 style={{ fontSize: 17, fontWeight: 800, color: '#065f46', marginBottom: 6 }}>
-                ⚡ WhatsApp Message Sent Directly!
+                ⚡ Chat & Flyer Sent Directly!
               </h4>
               <p style={{ fontSize: 13, color: '#047857', maxWidth: 320, margin: '0 auto 20px', lineHeight: 1.5 }}>
-                Pitch successfully sent to <strong>{shopName}</strong> (+{activePhone}) via WhatsApp Cloud API without manual steps.
+                Both the personalized outreach pitch and the <strong>EasyBillBro Restaurant Billing & POS flyer</strong> were delivered directly to <strong>{shopName}</strong> (+{activePhone}) via WhatsApp.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320, margin: '0 auto' }}>
@@ -317,6 +317,30 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                   </div>
                 </div>
               </div>
+
+              {/* Attached Flyer Preview (Sent with chat) */}
+              <div style={{ padding: '0 14px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#047857', textTransform: 'uppercase', letterSpacing: '.07em', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    📎 Attached Marketing Flyer
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: 10, border: '1px solid #a7f3d0' }}>
+                    Auto-sent with chat
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '10px 12px' }}>
+                  <img
+                    src="/images/easybillbro-flyer.jpg"
+                    alt="EasyBillBro Restaurant Billing & POS Flyer"
+                    style={{ width: 52, height: 68, objectFit: 'cover', borderRadius: 8, border: '1px solid #cbd5e1', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0f172a' }}>EasyBillBro Restaurant Billing & POS</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Plans: Basic (Rs 5k), Advanced (Rs 7k), Pro (Rs 10k)</div>
+                    <div style={{ fontSize: 10.5, color: '#059669', fontWeight: 600, marginTop: 3 }}>✓ High-res image dispatched to shop WhatsApp</div>
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -338,17 +362,17 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                   boxShadow: '0 4px 16px rgba(16,185,129,.35)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
-                title="Dispatches outreach pitch directly via WhatsApp API (appears in Mr LAD WhatsApp inbox)"
+                title="Dispatches outreach pitch and EasyBillBro flyer directly via WhatsApp API"
               >
                 {directSending ? (
                   <>
                     <Loader2 size={18} className="animate-spin text-white" />
-                    <span>Sending Directly via WhatsApp...</span>
+                    <span>Sending Pitch & Flyer via WhatsApp...</span>
                   </>
                 ) : (
                   <>
                     <Zap size={18} fill="#fff" />
-                    <span>⚡ Send Directly via WhatsApp ({activePhone ? '+' + activePhone : 'Shop'})</span>
+                    <span>⚡ Send Pitch + Flyer to WhatsApp ({activePhone ? '+' + activePhone : 'Shop'})</span>
                   </>
                 )}
               </button>
