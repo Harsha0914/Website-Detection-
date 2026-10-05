@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     LAD_AUTH_EMAIL: str = "api@lexonit.com"
     LAD_AUTH_PASSWORD: str = ""
     LAD_API_TOKEN: str = ""
-    WHATSAPP_DEFAULT_TEMPLATE_NAME: str = "signup_otp"
+    WHATSAPP_DEFAULT_TEMPLATE_NAME: str = "lexon_official_pitch"
 
     # Meta WhatsApp Cloud API (direct fallback)
     WHATSAPP_ACCESS_TOKEN: str = ""
@@ -95,9 +95,18 @@ class Settings(BaseSettings):
     MAX_REDIRECT_FOLLOW: int = 5
 
     class Config:
-        env_file = ".env"
+        import os
+        _cur_dir = os.path.dirname(os.path.abspath(__file__))
+        _backend_dir = os.path.dirname(_cur_dir)
+        _root_dir = os.path.dirname(_backend_dir)
+        env_file = (
+            os.path.join(_root_dir, ".env"),
+            os.path.join(_backend_dir, ".env"),
+            ".env",
+        )
         case_sensitive = True
         extra = "ignore"
 
 
 settings = Settings()
+

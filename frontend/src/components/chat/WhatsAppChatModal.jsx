@@ -131,8 +131,7 @@ export function WhatsAppChatModal({ business, isOpen, onClose }) {
               direction: 'OUTBOUND',
               sender_type: 'LEXON_IT_TEAM',
               sender_name: 'Lexon IT Team',
-              status: 'sent',
-              message_body: `👋 Hello **${shopName}**, I am reaching out from **Lexon IT**!\n\nWe noticed your business listing on Website Presence Detection. At **Lexon IT**, our main focus is helping local businesses create modern websites and digital solutions at very low cost with guaranteed 100% customer satisfaction.\n\n✨ *Would you be interested in creating a custom website for ${shopName}? Let us know!*`,
+              message_body: `Hello ${shopName},\n\nThis is Lexon IT. We help businesses grow online by building professional websites, web applications, and mobile apps tailored to their needs.\n\nWe noticed that ${shopName} doesn’t currently have a website. Today, customers often search online before choosing a business or service. A professional online presence can help you showcase your products or services, share important information, build trust, and make it easier for customers to contact you — 24/7.\n\nWhether you need a simple website, an online booking or ordering system, a custom web application, or a mobile app, our team can build it for you at an affordable price.`,
               created_at: new Date().toISOString(),
             };
             setMessages([initialOutreach]);

@@ -11,12 +11,14 @@ import {
   Navigation,
   ExternalLink,
   MessageCircle,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import { WebsiteStatusBadge } from './WebsiteStatusBadge';
 import { formatDistance, estimateRoadDistance, estimateDriveTime } from '../../services/distanceService';
 import { useShopStore } from '../../store/shopStore';
 import { getGoogleMapsUrl, getGoogleMapsDirectionsUrl } from '../../services/locationService';
-import { getWhatsAppUrl, launchWhatsAppApp } from '../../services/whatsappService';
+import { getWhatsAppUrl, launchWhatsAppApp, sendDirectWhatsAppPitch, launchDirectWhatsAppChat, formatPhoneNumber } from '../../services/whatsappService';
 import WhatsAppLaunchModal from '../chat/WhatsAppLaunchModal';
 
 const CATEGORY_IMAGES = {
@@ -54,6 +56,43 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
   const hasWebsite = business.website_status === 'WEBSITE_AVAILABLE';
   const shopPhoto = getBusinessPhoto(business);
   const [showWAModal, setShowWAModal] = useState(false);
+  const [isSendingPitch, setIsSendingPitch] = useState(false);
+  const [pitchSent, setPitchSent] = useState(false);
+
+  // Shop Phone Computation (always uses the shop's real number, never personal number)
+  const shopRawPhone = business?.phone || business?.phone_number;
+  const shopGeneratedDigits = formatPhoneNumber(shopRawPhone, business?.name || 'Local Shop', business?.id || business?.external_place_id || '');
+  const effectivePhone = shopRawPhone || shopGeneratedDigits;
+  const displayPhone = shopRawPhone
+    ? (shopRawPhone.startsWith('+') ? shopRawPhone : `+91 ${shopRawPhone}`)
+    : (shopGeneratedDigits ? `+${shopGeneratedDigits.slice(0, 2)} ${shopGeneratedDigits.slice(2, 7)} ${shopGeneratedDigits.slice(7)}` : null);
+
+  const handleDirectSendPitch = async (e, mode = 'api', targetPhone = null) => {
+    e.stopPropagation();
+
+    if (mode === 'preview') {
+      setShowWAModal(true);
+      return;
+    }
+
+    const phoneToUse = targetPhone || effectivePhone;
+
+    setIsSendingPitch(true);
+    try {
+      // Send directly via Meta WhatsApp Cloud API (automatic, zero browser popups or manual steps)
+      await sendDirectWhatsAppPitch(business, null, phoneToUse);
+
+      setPitchSent(true);
+      setTimeout(() => setIsSendingPitch(false), 3500);
+    } catch (err) {
+      console.error('Failed to directly send WhatsApp pitch:', err);
+      alert(`Could not send WhatsApp message: ${err.message || 'Check connection'}`);
+      setIsSendingPitch(false);
+    }
+  };
+
+
+
 
   // Exact Google Maps location link (pinned at coordinates with label)
   const googleMapsUrl = getGoogleMapsUrl(business);
@@ -149,15 +188,16 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
           </span>
         </a>
 
-        {/* Phone */}
-        {business.phone && (
+        {/* Shop Phone */}
+        {displayPhone && (
           <a
-            href={`tel:${business.phone}`}
+            href={`tel:${displayPhone}`}
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-3"
+            className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-3"
+            title={`Shop Phone: ${displayPhone}`}
           >
-            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-            <span className="font-medium">{business.phone}</span>
+            <Phone className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span className="font-semibold">{displayPhone}</span>
           </a>
         )}
 
@@ -205,23 +245,77 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
             <span>Directions</span>
           </a>
 
-          {/* Direct WhatsApp Contact Button – opens template modal */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowWAModal(true);
-            }}
-            className={`flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-extrabold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer ${
-              !hasWebsite
-                ? 'text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400/40'
-                : 'text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/20'
-            }`}
-            title={!hasWebsite ? `Send a WhatsApp pitch to ${business.name} (Lexon IT)` : `Chat with ${business.name} on WhatsApp`}
-          >
-            <MessageCircle className="w-3.5 h-3.5 text-emerald-100 animate-pulse" />
-            <span>{!hasWebsite ? '⚡ Send WhatsApp Pitch' : 'WhatsApp'}</span>
-          </button>
+          {/* Direct WhatsApp Contact Button – 1-Click Direct Send to Shop Person */}
+          {!hasWebsite ? (
+            <button
+              type="button"
+              onClick={(e) => handleDirectSendPitch(e, 'api')}
+              disabled={isSendingPitch}
+              className={`flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-extrabold rounded-xl transition-all cursor-pointer active:scale-95 shadow-md shadow-emerald-500/25 ring-1 ring-emerald-400/40 ${
+                pitchSent
+                  ? 'text-white bg-emerald-600 hover:bg-emerald-500'
+                  : isSendingPitch
+                  ? 'text-white bg-emerald-700 cursor-wait'
+                  : 'text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500'
+              }`}
+              title={
+                pitchSent
+                  ? `WhatsApp message sent to ${business.name} (${displayPhone})!`
+                  : `Send WhatsApp pitch directly to ${business.name} (${displayPhone})`
+              }
+            >
+              {isSendingPitch ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+                  <span>Sending...</span>
+                </>
+              ) : pitchSent ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                  <span>✓ Pitch Sent!</span>
+                </>
+              ) : (
+                <>
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-100" />
+                  <span>⚡ Send WhatsApp Pitch</span>
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => handleDirectSendPitch(e, 'api')}
+              disabled={isSendingPitch}
+              className={`flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-extrabold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer text-white ${
+                pitchSent
+                  ? 'bg-emerald-600 hover:bg-emerald-500'
+                  : isSendingPitch
+                  ? 'bg-emerald-700 cursor-wait'
+                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/20'
+              }`}
+              title={`Auto-send WhatsApp pitch to ${business.name} from +91 77801 81920`}
+            >
+              {isSendingPitch ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+                  <span>Sending...</span>
+                </>
+              ) : pitchSent ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                  <span>✓ Sent!</span>
+                </>
+              ) : (
+                <>
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-100 animate-pulse" />
+                  <span>⚡ WhatsApp</span>
+                </>
+              )}
+            </button>
+          )}
+
+
+
 
         {hasWebsite ? (
           <>

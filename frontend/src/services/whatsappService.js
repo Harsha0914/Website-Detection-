@@ -12,6 +12,11 @@ export function formatPhoneNumber(phone, shopName = '', placeId = '') {
     const raw = String(phone).trim();
     const clean = raw.replace(/\D/g, '');
 
+    // Special match: 77801 81920
+    if (clean.endsWith('7780181920')) {
+      return '917780181920';
+    }
+
     // 1. Leading 0 + 10-digit Indian mobile (e.g. 09100166100 -> 919100166100)
     if (clean.length === 11 && clean.startsWith('0') && ['6', '7', '8', '9'].includes(clean[1])) {
       return `91${clean.slice(1)}`;
@@ -39,7 +44,11 @@ export function formatPhoneNumber(phone, shopName = '', placeId = '') {
     }
   }
 
-  // Fallback ONLY when NO phone was provided
+  // Fallback to primary WhatsApp number if no phone available
+  if (!shopName && !placeId) {
+    return '917780181920';
+  }
+
   const str = `${placeId}_${shopName}`;
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -53,18 +62,18 @@ export function formatPhoneNumber(phone, shopName = '', placeId = '') {
   return `91${prefix}${suffix}`;
 }
 
+/**
+ * Canonical Lexon IT WhatsApp Outreach Template.
+ * Fills [Business Name] dynamically with the shop's name.
+ */
+export function getLexonOutreachMessage(businessName) {
+  const name = businessName || 'Business Owner';
+  return `Hello ${name},\n\nThis is Lexon IT. We help businesses grow online by building professional websites, web applications, and mobile apps tailored to their needs.\n\nWe noticed that ${name} doesn’t currently have a website. Today, customers often search online before choosing a business or service. A professional online presence can help you showcase your products or services, share important information, build trust, and make it easier for customers to contact you — 24/7.\n\nWhether you need a simple website, an online booking or ordering system, a custom web application, or a mobile app, our team can build it for you at an affordable price.`;
+}
+
 export function getWhatsAppUrl(business, customMsg = null) {
   const shopName = business?.name || 'your shop';
-  const hasWebsite = business?.website_status === 'WEBSITE_AVAILABLE';
-
-  let message = customMsg;
-  if (!message) {
-    if (hasWebsite) {
-      message = `Hello ${shopName}, I am reaching out from Lexon IT! We noticed your business listing on Website Presence Detection. At Lexon IT, our main focus is helping local businesses with modern website designs, speed optimization, and online growth at low cost with guaranteed 100% customer satisfaction. I would love to connect and help boost your shop's online performance and customer reach!`;
-    } else {
-      message = `Hello ${shopName}, I am reaching out from Lexon IT! We noticed your business listing on Website Presence Detection doesn't have an active website yet. At Lexon IT, our main focus is helping local businesses with high-quality, modern website designs at very low cost with guaranteed 100% customer satisfaction. We would love to build a custom website for your shop to grow your sales! Please reply if you are interested.`;
-    }
-  }
+  const message = customMsg || getLexonOutreachMessage(shopName);
 
   const encodedMsg = encodeURIComponent(message);
   const phoneDigits = formatPhoneNumber(business?.phone, shopName, business?.id || business?.external_place_id || '');
@@ -81,41 +90,10 @@ export function getWhatsAppWebFallbackUrl(business, customMsg = null) {
 }
 
 export async function launchWhatsAppApp(business, customMsg = null) {
-  const shopName = business?.name || 'Local Shop';
-  const phoneDigits = formatPhoneNumber(business?.phone, shopName, business?.id || business?.external_place_id || '');
-  const hasWebsite = business?.website_status === 'WEBSITE_AVAILABLE';
-  const defaultMsg = hasWebsite
-    ? `Hello ${shopName}, I am reaching out from Lexon IT! We noticed your business listing on Website Presence Detection. At Lexon IT, our main focus is helping local businesses with modern website designs, speed optimization, and online growth at low cost with guaranteed 100% customer satisfaction. I would love to connect and help boost your shop's online performance and customer reach!`
-    : `Hello ${shopName}, I am reaching out from Lexon IT! We noticed your business listing on Website Presence Detection doesn't have an active website yet. At Lexon IT, our main focus is helping local businesses with high-quality, modern website designs at very low cost with guaranteed 100% customer satisfaction. We would love to build a custom website for your shop to grow your sales! Please reply if you are interested.`;
-  const message = customMsg || defaultMsg;
-
-  // 1. Launch WhatsApp Desktop/Mobile app protocol directly, or fallback to direct web
-  const appUrl = getWhatsAppUrl(business, message);
-  const webUrl = getWhatsAppWebFallbackUrl(business, message);
-  try {
-    const a = document.createElement('a');
-    a.href = appUrl;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } catch (e) {
-    window.open(webUrl, '_blank');
-  }
-
-  // 2. Dispatch prompt event so user must confirm they actually sent the message before it is logged
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(
-      new CustomEvent('whatsapp-confirm-prompt', {
-        detail: {
-          phone: phoneDigits,
-          shopName,
-          businessId: business?.id,
-          message,
-        },
-      })
-    );
-  }
+  return sendDirectWhatsAppPitch(business, customMsg, true);
 }
+
+
 
 
 // ─── Backend API Integration Helpers ──────────────────────────────────────────
@@ -284,6 +262,160 @@ export async function broadcastWhatsAppToAllShops({ shops, customMessage, autoAI
 
   return res.data;
 }
+
+/**
+ * Directly sends an outreach pitch or message to a specific shop person via Lexon IT WhatsApp API.
+ * Dispatches directly without requiring manual opening of WhatsApp.
+ */
+export async function sendDirectWhatsAppPitch(business, customMessage = null, overridePhone = null) {
+  const shopName = business?.name || business?.shop_name || 'Local Shop';
+  const shopGeneratedPhone = formatPhoneNumber(business?.phone || business?.phone_number, shopName, business?.id || business?.external_place_id || '');
+  const rawPhone = overridePhone || business?.phone || business?.phone_number || shopGeneratedPhone;
+
+  const targetPhone = String(rawPhone).replace(/\D/g, '');
+  if (targetPhone.length < 10) {
+    throw new Error(`Invalid phone number for ${shopName}: ${rawPhone}`);
+  }
+
+  const businessId = business?.id || business?.business_id;
+
+  const defaultMsg = getLexonOutreachMessage(shopName);
+  const messageToSend = customMessage || defaultMsg;
+
+  // Send ONLY to the shop's number — never to user's own number as fallback
+  const shopsPayload = [
+    {
+      business_id: businessId,
+      name: shopName,
+      phone: targetPhone,
+      category: business?.category,
+      address: business?.address || business?.short_address,
+      external_place_id: business?.external_place_id || business?.place_id,
+    }
+  ];
+
+  const res = await api.post('/ai-whatsapp/broadcast-all', {
+    shops: shopsPayload,
+    custom_message: messageToSend,
+    auto_ai_enabled: true,
+  });
+
+  const firstResult = res.data?.results?.[0];
+  if (firstResult && firstResult.status === 'error') {
+    throw new Error(firstResult.error || 'Failed to send WhatsApp message');
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('whatsapp-direct-sent', {
+        detail: {
+          shopName,
+          phone: targetPhone,
+          businessId,
+          message: messageToSend,
+          autoSent: true,
+          mode: 'api',
+        },
+      })
+    );
+    window.dispatchEvent(
+      new CustomEvent('whatsapp-updated', {
+        detail: {
+          outbound: true,
+          phone_number: targetPhone,
+          shop_name: shopName,
+        },
+      })
+    );
+  }
+
+  return {
+    success: true,
+    shopName,
+    phone: targetPhone,
+    ...firstResult,
+    total_sent: res.data?.total_sent,
+  };
+}
+
+/**
+ * No-op helper for backward compatibility (flyer removed).
+ */
+export async function copyFlyerToClipboard() {
+  return false;
+}
+
+/**
+ * Directly launches WhatsApp to the shop person with the full pitch prefilled.
+ * Automatically chooses universal / web / app protocol and records the communication in backend CRM.
+ */
+export function launchDirectWhatsAppChat(business, customMsg = null, mode = 'web', overridePhone = null) {
+  const shopName = business?.name || 'Local Shop';
+  const rawPhone = overridePhone || business?.phone || business?.phone_number;
+  if (!rawPhone) {
+    console.error(`[launchDirectWhatsAppChat] No phone number for ${shopName}!`);
+    return { success: false, error: 'No phone number' };
+  }
+  const phoneDigits = formatPhoneNumber(rawPhone, shopName, business?.id || business?.external_place_id || '');
+
+  const defaultMsg = getLexonOutreachMessage(shopName);
+  const message = customMsg || defaultMsg;
+  const encodedMsg = encodeURIComponent(message);
+  
+  // Determine target URL (web opens web.whatsapp.com directly)
+  let targetUrl = `https://web.whatsapp.com/send?phone=${phoneDigits}&text=${encodedMsg}`;
+  if (mode === 'universal') {
+    targetUrl = `https://api.whatsapp.com/send?phone=${phoneDigits}&text=${encodedMsg}`;
+  }
+
+  // 3. Open WhatsApp directly in new tab or app protocol using reliable anchor click
+  try {
+    const a = document.createElement('a');
+    a.href = targetUrl;
+    if (mode !== 'app') {
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+    }
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (_) {
+    window.open(targetUrl, '_blank');
+  }
+
+  // 4. Record outbound contact in backend CRM stream
+  trackWhatsAppContact(phoneDigits, shopName, business?.id, message).catch(() => {});
+
+  // 5. Fire UI events for real-time updates and notification toast
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('whatsapp-direct-sent', {
+        detail: {
+          shopName,
+          phone: phoneDigits,
+          businessId: business?.id,
+          message,
+          mode,
+          isUserNumber: phoneDigits.endsWith('7780181920'),
+        },
+      })
+    );
+    window.dispatchEvent(
+      new CustomEvent('whatsapp-updated', {
+        detail: {
+          outbound: true,
+          phone_number: phoneDigits,
+          shop_name: shopName,
+        },
+      })
+    );
+  }
+
+  return { success: true, phone: phoneDigits, shopName, message };
+}
+
+
+
 
 
 

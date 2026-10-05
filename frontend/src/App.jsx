@@ -17,6 +17,7 @@ import GoodWebsitesPage from './pages/shops/GoodWebsitesPage';
 import NeedsImprovementPage from './pages/shops/NeedsImprovementPage';
 import ShopDetailPage from './pages/shops/ShopDetailPage';
 import ChatPage from './pages/chat/ChatPage';
+import WhatsAppHubPage from './pages/whatsapp/WhatsAppHubPage';
 
 // Admin pages
 import { AdminLayout } from './components/layout/AdminLayout';
@@ -132,6 +133,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ChatPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/whatsapp"
+        element={
+          <ProtectedRoute>
+            <WhatsAppHubPage />
           </ProtectedRoute>
         }
       />

@@ -1,56 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MessageCircle, Copy, Check, ExternalLink, Edit3, Image, AlertCircle, CheckCircle2, RotateCcw } from 'lucide-react';
-import { formatPhoneNumber, trackWhatsAppContact } from '../../services/whatsappService';
+import { X, MessageCircle, Copy, Check, ExternalLink, Edit3, AlertCircle, CheckCircle2, RotateCcw, Zap, Loader2 } from 'lucide-react';
+import { formatPhoneNumber, trackWhatsAppContact, sendDirectWhatsAppPitch, launchDirectWhatsAppChat, getLexonOutreachMessage } from '../../services/whatsappService';
 
 function buildMessage(business) {
-  const name = business?.name || 'your shop';
-  const hasWebsite = business?.website_status === 'WEBSITE_AVAILABLE';
-  if (hasWebsite) {
-    return 'Hello ' + name + ', I am reaching out from Lexon IT! We noticed your business listing on Website Presence Detection. At Lexon IT, our main focus is helping local businesses with modern website designs, speed optimization, and online growth at low cost with guaranteed 100% customer satisfaction. I would love to connect and help boost your shop\'s online performance and customer reach!';
-  }
-  return 'Hello ' + name + ', I am reaching out from Lexon IT! We noticed your business listing on Website Presence Detection doesn\'t have an active website yet. At Lexon IT, our main focus is helping local businesses with high-quality, modern website designs at very low cost with guaranteed 100% customer satisfaction. We would love to build a custom website for your shop to grow your sales! Please reply if you are interested.';
-}
-
-async function copyImageToClipboard() {
-  try {
-    const res = await fetch('/images/lexonit-flyer.jpg');
-    const blob = await res.blob();
-    const bitmap = await createImageBitmap(blob);
-    const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(bitmap, 0, 0);
-    canvas.toBlob(async (pngBlob) => {
-      try {
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': pngBlob }),
-        ]);
-      } catch (e) {
-        console.warn('Clipboard image write failed:', e);
-      }
-    }, 'image/png');
-    return true;
-  } catch (e) {
-    console.warn('Copy image failed:', e);
-    return false;
-  }
+  return getLexonOutreachMessage(business?.name || 'Business Owner');
 }
 
 export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
   const shopName = business?.name || 'your shop';
   const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
-  const [imgCopied, setImgCopied] = useState(false);
   const [opening, setOpening] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [directSending, setDirectSending] = useState(false);
+  const [directSuccess, setDirectSuccess] = useState(false);
   const [step, setStep] = useState(0); // 0 = compose, 1 = awaiting confirmation, 2 = confirmed sent
+  const [targetType, setTargetType] = useState('shop'); // 'shop', 'my_phone', 'custom'
+  const [customPhone, setCustomPhone] = useState('');
 
-  const phoneDigits = business
-    ? formatPhoneNumber(business.phone, shopName, business.id || business.external_place_id || '')
+  const shopPhoneDigits = business
+    ? formatPhoneNumber(business.phone || business.phone_number, shopName, business.id || business.external_place_id || '')
     : '';
-  const phoneDisplay = phoneDigits ? '+' + phoneDigits : 'No number available';
+
+  const activePhone = shopPhoneDigits;
+  const phoneDisplay = activePhone ? '+' + activePhone : 'No number available';
 
   useEffect(() => {
     if (business) setMessage(buildMessage(business));
@@ -59,10 +33,13 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       setMessage(buildMessage(business));
+      setTargetType('shop');
+      setCustomPhone('');
       setCopied(false);
-      setImgCopied(false);
       setOpening(false);
       setRecording(false);
+      setDirectSending(false);
+      setDirectSuccess(false);
       setStep(0);
       document.body.style.overflow = 'hidden';
     } else {
@@ -79,37 +56,39 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleCopyImage = async () => {
-    await copyImageToClipboard();
-    setImgCopied(true);
-    setTimeout(() => setImgCopied(false), 3000);
+
+  // Direct WhatsApp API Send (dispatches directly from website to shop owner or target phone)
+  const handleDirectSendAPI = async (overrideNum = null) => {
+    const numToUse = overrideNum || activePhone;
+    if (!message.trim() || !numToUse) return;
+    setDirectSending(true);
+    try {
+      await sendDirectWhatsAppPitch({
+        ...business,
+        phone: numToUse,
+      }, message);
+      setDirectSuccess(true);
+      setStep(2);
+    } catch (err) {
+      console.error('Direct WhatsApp send failed:', err);
+      alert('Could not send WhatsApp message: ' + (err.message || 'Check connection'));
+    } finally {
+      setDirectSending(false);
+    }
   };
 
-  // Direct WhatsApp Desktop / Mobile App (bypasses browser landing page completely)
-  const handleOpenDirectApp = async () => {
-    setOpening(true);
-    await copyImageToClipboard();
-    setImgCopied(true);
-    const appUrl = 'whatsapp://send?phone=' + phoneDigits + '&text=' + encodeURIComponent(message);
-    const a = document.createElement('a');
-    a.href = appUrl;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setOpening(false);
-    setStep(1);
+  // Direct WhatsApp Launch (opens web/app with pre-filled message directly so chat is visible in WhatsApp)
+  const handleDirectLaunchWhatsApp = (mode = 'web', overrideNum = null) => {
+    if (!message.trim()) return;
+    const numToUse = overrideNum || activePhone;
+    launchDirectWhatsAppChat(business, message, mode, numToUse);
+    setDirectSuccess(true);
+    setStep(2);
+    setTimeout(() => {
+      onClose();
+    }, 1500);
   };
 
-  // Direct WhatsApp Web (loads web.whatsapp.com directly without api.whatsapp.com landing page)
-  const handleOpenDirectWeb = async () => {
-    setOpening(true);
-    await copyImageToClipboard();
-    setImgCopied(true);
-    const webUrl = 'https://web.whatsapp.com/send?phone=' + phoneDigits + '&text=' + encodeURIComponent(message);
-    window.open(webUrl, '_blank');
-    setOpening(false);
-    setStep(1);
-  };
 
   // Step 2a: User confirms message was sent -> now log it
   const handleConfirmSent = async () => {
@@ -197,17 +176,15 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                 WhatsApp Opened For {shopName}
               </h4>
               <p style={{ fontSize: 12.5, color: '#64748b', lineHeight: 1.5, marginBottom: 14 }}>
-                Please switch to your WhatsApp tab to review and send.
-                <br />
-                <span style={{ color: '#059669', fontWeight: 600 }}>Flyer image copied to clipboard (Ctrl+V in WhatsApp chat).</span>
+                Review and send the message in your WhatsApp chat.
               </p>
 
               <div style={{ background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: 14, padding: '14px 12px', marginBottom: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: '#1e293b', marginBottom: 4 }}>
-                  Did you actually send the message in WhatsApp?
+                  Did you send the message in WhatsApp?
                 </div>
                 <div style={{ fontSize: 11, color: '#64748b' }}>
-                  Only messages you confirm will be added to your Recent Communications Stream.
+                  Confirming will record this interaction in your Recent Communications Stream.
                 </div>
               </div>
 
@@ -239,81 +216,86 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   }}
                 >
-                  <X size={14} /> No, I Didn't Send (Don't Log)
+                  <X size={14} /> Close
                 </button>
-
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 6 }}>
-                  <button
-                    type='button'
-                    onClick={handleOpenDirectApp}
-                    style={{
-                      background: 'none', border: 'none', color: '#059669',
-                      fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 4,
-                    }}
-                  >
-                    <RotateCcw size={12} />
-                    <span>Re-open WhatsApp App</span>
-                  </button>
-                  <span style={{ color: '#cbd5e1' }}>|</span>
-                  <button
-                    type='button'
-                    onClick={handleOpenDirectWeb}
-                    style={{
-                      background: 'none', border: 'none', color: '#0d9488',
-                      fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 4,
-                    }}
-                  >
-                    <ExternalLink size={12} />
-                    <span>Re-open WhatsApp Web</span>
-                  </button>
-                </div>
               </div>
             </div>
           )}
 
           {/* STEP 2: Confirmed Success */}
           {step === 2 && (
-            <div style={{ padding: '36px 18px', textAlign: 'center' }}>
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#ecfdf5', color: '#10b981', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Check size={28} />
+            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#ecfdf5', color: '#10b981', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(16,185,129,.25)' }}>
+                <Check size={32} strokeWidth={2.5} />
               </div>
-              <h4 style={{ fontSize: 16, fontWeight: 800, color: '#065f46', marginBottom: 4 }}>
-                Message Logged!
+              <h4 style={{ fontSize: 17, fontWeight: 800, color: '#065f46', marginBottom: 6 }}>
+                ⚡ WhatsApp Message Sent Directly!
               </h4>
-              <p style={{ fontSize: 12, color: '#047857' }}>
-                {shopName} has been recorded in your Recent Communications Stream.
+              <p style={{ fontSize: 13, color: '#047857', maxWidth: 320, margin: '0 auto 20px', lineHeight: 1.5 }}>
+                Pitch successfully sent to <strong>{shopName}</strong> (+{activePhone}) via WhatsApp Cloud API without manual steps.
               </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320, margin: '0 auto' }}>
+                <a
+                  href='https://www.mrlads.com/conversations'
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '12px 16px', background: 'linear-gradient(135deg,#059669,#10b981)',
+                    color: '#fff', borderRadius: 14, fontWeight: 800, fontSize: 13,
+                    textDecoration: 'none', boxShadow: '0 4px 12px rgba(16,185,129,.3)'
+                  }}
+                >
+                  <MessageCircle size={16} />
+                  <span>View Chat in WA Business (mrlads.com) ↗</span>
+                </a>
+
+                <a
+                  href='/whatsapp'
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '11px 16px', background: '#f8fafc', color: '#1e293b',
+                    borderRadius: 14, fontWeight: 700, fontSize: 13,
+                    textDecoration: 'none', border: '1px solid #cbd5e1'
+                  }}
+                >
+                  <span>Open In-App WhatsApp Hub ↗</span>
+                </a>
+
+                <button
+                  type='button'
+                  onClick={onClose}
+                  style={{
+                    padding: '9px', background: 'transparent', color: '#64748b',
+                    border: 'none', fontWeight: 600, fontSize: 12, cursor: 'pointer', marginTop: 4
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           )}
 
           {/* STEP 0: Compose & Preview */}
           {step === 0 && (
             <>
-              {/* Lexon IT Website Flyer */}
-              <div style={{ padding: '14px 14px 0' }}>
-                <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,.07)', background: '#0b0f19' }}>
-                  <img
-                    src='/images/lexonit-flyer.jpg'
-                    alt='Lexon IT - Website Detection & Digital Growth for Local Shops'
-                    style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: 200, objectPosition: 'top' }}
-                    onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
-                  />
-                  <button
-                    onClick={handleCopyImage}
-                    style={{ position: 'absolute', top: 10, right: 10, background: imgCopied ? 'rgba(16,185,129,.95)' : 'rgba(0,0,0,.7)', border: '1px solid rgba(255,255,255,.2)', borderRadius: 10, padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: '#fff', fontSize: 11, fontWeight: 700, backdropFilter: 'blur(6px)', boxShadow: '0 2px 6px rgba(0,0,0,.3)' }}
-                  >
-                    {imgCopied ? <><Check size={12} /> Copied!</> : <><Image size={12} /> Copy Flyer</>}
-                  </button>
+
+
+              {/* Recipient Target Selector */}
+              {/* Recipient Target Shop */}
+              <div style={{ padding: '12px 14px 4px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
+                  Recipient
                 </div>
-                <p style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 6 }}>
-                  Flyer will be copied to clipboard when you open WhatsApp — paste with Ctrl+V
-                </p>
+                <div style={{ padding: '8px 12px', borderRadius: 12, fontSize: 12, fontWeight: 700, background: '#ecfdf5', border: '1px solid #10b981', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>🏪 {shopName}</span>
+                  <span style={{ fontFamily: 'monospace' }}>{phoneDisplay}</span>
+                </div>
               </div>
 
               {/* Editable message */}
-              <div style={{ padding: '12px 14px 10px' }}>
+              <div style={{ padding: '10px 14px 10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.07em', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Edit3 size={12} /> Message (editable)
@@ -341,55 +323,69 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
 
         {/* Footer for Step 0 */}
         {step === 0 && (
-          <div style={{ padding: '10px 14px 16px', borderTop: '1px solid #f1f5f9', background: '#fff', flexShrink: 0 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: '12px 14px 16px', borderTop: '1px solid #f1f5f9', background: '#fff', flexShrink: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* PRIMARY ACTION: Direct Cloud API dispatch */}
               <button
-                onClick={handleOpenDirectApp}
-                disabled={opening || !phoneDigits || !message.trim()}
+                type='button'
+                onClick={() => handleDirectSendAPI()}
+                disabled={!activePhone || !message.trim() || directSending}
                 style={{
-                  width: '100%', padding: '13px',
-                  background: opening || !phoneDigits || !message.trim() ? '#94a3b8' : 'linear-gradient(135deg,#059669,#0d9488)',
-                  borderRadius: 16, color: '#fff', fontWeight: 800, fontSize: 14,
-                  border: 'none', cursor: phoneDigits && message.trim() ? 'pointer' : 'not-allowed',
+                  width: '100%', padding: '14px',
+                  background: !activePhone || !message.trim() ? '#94a3b8' : 'linear-gradient(135deg,#059669,#0d9488)',
+                  borderRadius: 16, color: '#fff', fontWeight: 800, fontSize: 14.5,
+                  border: 'none', cursor: activePhone && message.trim() && !directSending ? 'pointer' : 'not-allowed',
                   boxShadow: '0 4px 16px rgba(16,185,129,.35)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
-                title="Directly triggers the WhatsApp desktop/mobile app"
+                title="Dispatches outreach pitch directly via WhatsApp API (appears in Mr LAD WhatsApp inbox)"
               >
-                <MessageCircle size={19} />
-                <span>Directly Open WhatsApp App</span>
+                {directSending ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin text-white" />
+                    <span>Sending Directly via WhatsApp...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap size={18} fill="#fff" />
+                    <span>⚡ Send Directly via WhatsApp ({activePhone ? '+' + activePhone : 'Shop'})</span>
+                  </>
+                )}
               </button>
 
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type='button'
-                  onClick={handleOpenDirectWeb}
+                  onClick={() => handleDirectLaunchWhatsApp('web')}
+                  disabled={!activePhone || !message.trim()}
                   style={{
-                    flex: 1, padding: '10px 12px', fontSize: 12, fontWeight: 700,
-                    color: '#059669', background: '#f0fdf4', border: '1px solid #bbf7d0',
-                    borderRadius: 12, textAlign: 'center', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    flex: 1, padding: '9px 10px', fontSize: 11.5, fontWeight: 700,
+                    color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                    borderRadius: 12, cursor: activePhone && message.trim() ? 'pointer' : 'not-allowed',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                   }}
-                  title="Directly opens WhatsApp Web chat without any intermediate landing page"
+                  title="Open in WhatsApp Web"
                 >
-                  <ExternalLink size={13} /> Directly Open WhatsApp Web
+                  <ExternalLink size={14} /> WhatsApp Web
                 </button>
+
                 <button
                   onClick={handleCopyText}
                   style={{
-                    flex: 1, padding: '10px 12px', fontSize: 12, fontWeight: 700,
+                    padding: '9px 16px', fontSize: 11.5, fontWeight: 700,
                     color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0',
                     borderRadius: 12, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                   }}
                 >
                   {copied ? <Check size={13} style={{ color: '#10b981' }} /> : <Copy size={13} />}
-                  {copied ? 'Copied!' : 'Copy Message'}
+                  {copied ? 'Copied' : 'Copy Text'}
                 </button>
               </div>
             </div>
           </div>
         )}
+
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: '@keyframes modalFadeIn { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }' }} />

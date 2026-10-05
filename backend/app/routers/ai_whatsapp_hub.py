@@ -512,10 +512,10 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
         raise HTTPException(status_code=400, detail="No shops provided for broadcast.")
 
     default_template = (
-        "Hello {shop_name}, I am reaching out from Lexon IT! "
-        "We noticed your business listing on Website Presence Detection doesn't have an active website yet. "
-        "At Lexon IT, our main focus is helping local businesses with high-quality, modern website designs at very low cost with guaranteed 100% customer satisfaction. "
-        "We would love to build a custom website for your shop to grow your sales! Please reply if you are interested."
+        "Hello {shop_name},\n\n"
+        "This is Lexon IT. We help businesses grow online by building professional websites, web applications, and mobile apps tailored to their needs.\n\n"
+        "We noticed that {shop_name} doesn’t currently have a website. Today, customers often search online before choosing a business or service. A professional online presence can help you showcase your products or services, share important information, build trust, and make it easier for customers to contact you — 24/7.\n\n"
+        "Whether you need a simple website, an online booking or ordering system, a custom web application, or a mobile app, our team can build it for you at an affordable price."
     )
 
     template = payload.custom_message.strip() if payload.custom_message and payload.custom_message.strip() else default_template
@@ -553,6 +553,8 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
         personalized_msg = (
             template
             .replace("{shop_name}", s_name)
+            .replace("[Business Name]", s_name)
+            .replace("{Business Name}", s_name)
             .replace("{category}", s_category)
             .replace("{ShopName}", s_name)
         )
@@ -574,15 +576,18 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
 
             # 2. Dispatch via Meta WhatsApp Cloud API client
             whatsapp_sent = False
+            w_res = None
             try:
                 whatsapp_sent, w_res, _ = WhatsAppCloudClient.send_text(
                     db=db,
                     to_phone=conv.phone_number,
                     text_body=personalized_msg,
                     preview_url=True,
+                    recipient_name=s_name,
                 )
             except Exception as w_err:
                 whatsapp_sent = False
+                w_res = str(w_err)
 
             # 3. Create outbound message record
             outbound_msg = WhatsAppMessage(
@@ -592,7 +597,7 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
                 sender_name=payload.operator_name or "Lexon IT AI Assistant",
                 message_body=personalized_msg,
                 ai_generated=bool(payload.auto_ai_enabled),
-                status="sent" if whatsapp_sent else "delivered",
+                status="sent" if whatsapp_sent else "failed",
                 is_read=True,
                 created_at=datetime.utcnow(),
             )
@@ -610,18 +615,20 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
                     sentiment="POSITIVE",
                     tokens_used=75,
                     latency_ms=30,
-                    was_sent=True,
+                    was_sent=whatsapp_sent,
                 )
                 db.add(aim_log)
 
             db.commit()
-            sent_count += 1
+            if whatsapp_sent:
+                sent_count += 1
 
             results.append({
                 "conversation_id": conv.id,
                 "shop_name": s_name,
                 "phone_number": norm_phone,
-                "status": "sent",
+                "status": "sent" if whatsapp_sent else "error",
+                "error": None if whatsapp_sent else str(w_res or "Failed to deliver WhatsApp message"),
                 "message_id": outbound_msg.id,
                 "auto_ai_enabled": conv.auto_ai_enabled,
             })

@@ -109,6 +109,62 @@ class MrLadWhatsAppClient:
         return None
 
     @classmethod
+    def _resolve_flyer_path(cls) -> Optional[str]:
+        import os
+        candidates = [
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "static", "images", "easybillbro-flyer.jpg")),
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "frontend", "public", "images", "easybillbro-flyer.jpg")),
+            os.path.abspath("backend/static/images/easybillbro-flyer.jpg"),
+            os.path.abspath("frontend/public/images/easybillbro-flyer.jpg"),
+            "c:/Shop/backend/static/images/easybillbro-flyer.jpg",
+            "c:/Shop/frontend/public/images/easybillbro-flyer.jpg",
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+        return None
+
+    @classmethod
+    def send_image_message(cls, conv_id: str, img_path: str, caption: str = "") -> Tuple[bool, str, dict]:
+        import base64
+        token, _ = cls.get_token()
+        if not token:
+            return False, "Auth failed", {}
+        api_base = settings.LAD_API_BASE_URL.rstrip("/")
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            with open(img_path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            payload = {
+                "type": "image",
+                "file_base64": b64,
+                "content_type": "image/jpeg",
+                "caption": caption
+            }
+            res = requests.post(f"{api_base}/api/conversations/{conv_id}/messages", headers=headers, json=payload, timeout=20)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("success"):
+                    inner = data.get("data", {})
+                    msg_id = inner.get("id") or inner.get("message_id") or f"wamid.LAD_{uuid.uuid4().hex[:12]}"
+                    logger.info(f"[Mr LAD API] Flyer image sent to conv {conv_id}. ID: {msg_id}")
+                    return True, msg_id, data
+            err_data = {}
+            try:
+                err_data = res.json()
+            except Exception:
+                pass
+            err = err_data.get("detail") or err_data.get("error") or res.text
+            logger.info(f"[Mr LAD API Flyer Image Note {res.status_code}] {err}")
+            return False, str(err), err_data
+        except Exception as e:
+            logger.warning(f"[Mr LAD API Flyer Image Exception] {e}")
+            return False, str(e), {}
+
+    @classmethod
     def send_message(
         cls,
         to_phone: str,
@@ -131,7 +187,9 @@ class MrLadWhatsAppClient:
         """
         recipient = cls._clean_phone(to_phone)
         display_name = recipient_name or "Shop Owner"
-        chosen_template = template_name or settings.WHATSAPP_DEFAULT_TEMPLATE_NAME or "signup_otp"
+        chosen_template = template_name or getattr(settings, "WHATSAPP_DEFAULT_TEMPLATE_NAME", None) or "lexon_official_pitch"
+        if not chosen_template or chosen_template in ("hello_message", "website_presence_pitch", "lexon_website_outreach", "lexon_website_pitch"):
+            chosen_template = "lexon_official_pitch"
 
         # Check for test mode or missing credentials
         has_creds = bool(settings.LAD_API_TOKEN or settings.LAD_AUTH_PASSWORD)
@@ -194,33 +252,33 @@ class MrLadWhatsAppClient:
 
         # Build the actual message to show the shop owner
         outbound_message = text_body or (
-            f"Hello {display_name}! I am reaching out from Lexon IT. "
-            "We noticed your business on our Website Presence Detection platform. "
-            "We help local shops build a professional website, improve Google rankings, "
-            "and grow their digital presence - at very affordable prices with 100% customer satisfaction. "
-            "Interested? Reply YES for a free consultation!"
+            f"Hello {display_name},\n\n"
+            "This is Lexon IT. We help businesses grow online by building professional websites, web applications, and mobile apps tailored to their needs.\n\n"
+            f"We noticed that {display_name} doesn’t currently have a website. Today, customers often search online before choosing a business or service. A professional online presence can help you showcase your products or services, share important information, build trust, and make it easier for customers to contact you — 24/7.\n\n"
+            "Whether you need a simple website, an online booking or ordering system, a custom web application, or a mobile app, our team can build it for you at an affordable price."
         )
 
         try:
             if not language_code or language_code == "en":
                 language_code = "en_US"
 
-            # ── Strategy 1: Existing conversation → try free-text directly ──────────
-            conv_id = cls._find_conversation_id(recipient, token)
-            if conv_id:
-                logger.info(f"[Mr LAD API] Existing conversation ({conv_id}). Sending free-text.")
-                ok, msg_id, freetext_data = _send_freetext(conv_id, outbound_message)
-                if ok:
-                    return True, msg_id, freetext_data
-                logger.warning(
-                    f"[Mr LAD API] Free-text failed for existing conversation {conv_id} ({msg_id}). "
-                    "Falling back to template initiation (e.g. outside 24h customer window)..."
-                )
+            # ── Dispatch via send-template-to-members ──────────────────────────────────
+            # Mr LAD API delivers approved 'chosen_template' (lexon_official_pitch).
+            # Parameters for lexon_official_pitch: {{1}} = display_name, {{2}} = display_name.
+            logger.info(f"[Mr LAD API] Dispatching to {recipient} with template '{chosen_template}'...")
+            if template_parameters is not None:
+                params_list = template_parameters
+            elif chosen_template == "lexon_official_pitch":
+                params_list = [display_name, display_name]
+            else:
+                params_list = [display_name]
 
-            # ── Strategy 2: New contact or expired 24h window → template to open conversation, then free-text ──
-            # Step A: Send approved template to create the conversation (Meta requirement for first contact)
-            logger.info(f"[Mr LAD API] New contact {recipient}. Opening conversation with template...")
-            member_obj: Dict[str, Any] = {"phone": recipient, "name": display_name}
+            member_obj: Dict[str, Any] = {
+                "phone": recipient,
+                "name": display_name,
+                "params": params_list,
+                "text": outbound_message,
+            }
             init_payload = {
                 "members": [member_obj],
                 "template_name": chosen_template,
@@ -230,24 +288,23 @@ class MrLadWhatsAppClient:
             init_data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
             if res.status_code != 200 or not (init_data.get("success") or init_data.get("sent", 0) > 0):
                 err_text = init_data.get("error") or init_data.get("message") or res.text
-                logger.error(f"[Mr LAD API Init Error {res.status_code}] {err_text}")
+                logger.error(f"[Mr LAD API Send Error {res.status_code}] {err_text}")
                 return False, f"HTTP {res.status_code}: {err_text}", init_data
 
-            # Step B: Wait briefly, find the new conversation, send the real website detection message
-            logger.info("[Mr LAD API] Template sent. Sending website detection message as follow-up...")
-            time.sleep(1.5)
-            new_conv_id = cls._find_conversation_id(recipient, token)
-            if new_conv_id:
-                ok, msg_id, freetext_data = _send_freetext(new_conv_id, outbound_message)
-                if ok:
-                    return True, msg_id, {"init": init_data, "message": freetext_data}
-                logger.warning("[Mr LAD API] Free-text follow-up failed, returning template result.")
-
-            # Fallback: return the template send result
             results = init_data.get("results", [])
+            conv_id = (results[0].get("conversation_id") or "") if results else ""
             msg_id = (results[0].get("message_id") or results[0].get("id") or "") if results else ""
             if not msg_id:
                 msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
+            logger.info(f"[Mr LAD API] Successfully sent template to {recipient} (Conv: {conv_id}, ID: {msg_id})")
+
+            # Follow up with free-text message in the conversation thread so the full message body is always explicitly visible in chat
+            if conv_id and outbound_message:
+                try:
+                    _send_freetext(conv_id, outbound_message)
+                except Exception as ft_err:
+                    logger.warning(f"[Mr LAD API Follow-up Note] {ft_err}")
+
             return True, msg_id, init_data
 
         except Exception as e:

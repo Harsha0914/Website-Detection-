@@ -133,6 +133,21 @@ app.include_router(admin.router)
 app.include_router(whatsapp.router)
 app.include_router(ai_whatsapp_hub.router)
 
+# Serve flyer image directly
+from fastapi.responses import FileResponse
+@app.get("/images/easybillbro-flyer.jpg")
+@app.get("/images/flyer.jpg")
+@app.get("/static/images/easybillbro-flyer.jpg")
+def get_flyer_image():
+    for candidate in [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static", "images", "easybillbro-flyer.jpg")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "images", "easybillbro-flyer.jpg")),
+    ]:
+        if os.path.exists(candidate):
+            return FileResponse(candidate, media_type="image/jpeg")
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Flyer image not found")
+
 @app.get("/")
 def root():
     return {
@@ -188,5 +203,6 @@ async def start_whatsapp_background_poller():
             await asyncio.sleep(4)
 
     asyncio.create_task(_poller())
+
 
 

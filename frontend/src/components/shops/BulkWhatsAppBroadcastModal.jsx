@@ -22,21 +22,9 @@ import { broadcastWhatsAppToAllShops, formatPhoneNumber, launchWhatsAppApp } fro
 const PRESET_TEMPLATES = [
   {
     id: 'lexon_official',
-    name: '🌟 Lexon IT Official Pitch (Recommended)',
-    badge: 'High Conversion',
-    text: `Hello {shop_name}, I am reaching out from Lexon IT! We noticed your business listing on Website Presence Detection doesn't have an active website yet. At Lexon IT, our main focus is helping local businesses with high-quality, modern website designs at very low cost with guaranteed 100% customer satisfaction. We would love to build a custom website for your shop to boost your sales! Please reply if you are interested.`,
-  },
-  {
-    id: 'starter_package',
-    name: '💰 Starter Offer (₹4,999 Special)',
-    badge: 'Budget Friendly',
-    text: `Hi {shop_name}! Lexon IT is offering custom mobile-friendly websites for {category} businesses starting at just ₹4,999, including Google Maps SEO, WhatsApp ordering, and free cloud hosting. Would you like a free live demo preview for your shop?`,
-  },
-  {
-    id: 'growth_demo',
-    name: '🚀 Free Demo & Sales Growth',
-    badge: 'Fast Reply',
-    text: `Hello {shop_name} team! Having a website can double your local customer inquiries in your area. We design high-speed websites with guaranteed 100% satisfaction. Reply 'YES' to get a free personalized demo layout created for your shop!`,
+    name: '🌟 Lexon IT Official Website & App Pitch',
+    badge: 'Official Template',
+    text: `Hello {shop_name},\n\nThis is Lexon IT. We help businesses grow online by building professional websites, web applications, and mobile apps tailored to their needs.\n\nWe noticed that {shop_name} doesn’t currently have a website. Today, customers often search online before choosing a business or service. A professional online presence can help you showcase your products or services, share important information, build trust, and make it easier for customers to contact you — 24/7.\n\nWhether you need a simple website, an online booking or ordering system, a custom web application, or a mobile app, our team can build it for you at an affordable price.`,
   },
 ];
 
@@ -258,12 +246,12 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
               {/* Template Switcher */}
               <div className="space-y-2">
                 <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                  <span>1. Choose AI Outreach Pitch Template</span>
-                  <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
-                    {PRESET_TEMPLATES.length} presets available
+                  <span>Official AI Outreach Pitch Template</span>
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    Active Official Template
                   </span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   {PRESET_TEMPLATES.map((tmpl) => {
                     const isSelected = selectedTemplateId === tmpl.id;
                     return (

@@ -170,6 +170,15 @@ export default function Navbar() {
                   </button>
                 )}
 
+                <button
+                  onClick={() => handleNavigate('/whatsapp')}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-full transition-all border border-emerald-200 dark:border-emerald-800/60"
+                  title="Open live WhatsApp Chats and Lead Inbox"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>WhatsApp Hub</span>
+                </button>
+
                 <div className="relative" ref={loginDropdownRef}>
                   <button
                     onClick={() => setLoginDropdownOpen(!loginDropdownOpen)}
@@ -193,6 +202,13 @@ export default function Navbar() {
                         >
                           <LayoutDashboard className="w-3.5 h-3.5 text-blue-600" />
                           <span>User Dashboard</span>
+                        </button>
+                        <button
+                          onClick={() => handleNavigate('/whatsapp')}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl transition-all text-left"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>WhatsApp Hub & Chats</span>
                         </button>
                         {user?.role === 'ADMIN' && (
                           <button
@@ -313,6 +329,13 @@ export default function Navbar() {
                         >
                           <LayoutDashboard className="w-3.5 h-3.5" />
                           <span>Dashboard</span>
+                        </button>
+                        <button
+                          onClick={() => handleNavigate('/whatsapp')}
+                          className="w-full text-left flex items-center gap-2 px-3 py-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-xl"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>WhatsApp Hub & Chats</span>
                         </button>
                         {user?.role === 'ADMIN' && (
                           <button

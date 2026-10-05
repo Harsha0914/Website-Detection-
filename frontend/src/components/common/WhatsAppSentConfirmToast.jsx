@@ -4,6 +4,7 @@ import { trackWhatsAppContact } from '../../services/whatsappService';
 
 export default function WhatsAppSentConfirmToast() {
   const [promptData, setPromptData] = useState(null);
+  const [directSentData, setDirectSentData] = useState(null);
   const [logging, setLogging] = useState(false);
   const [justLogged, setJustLogged] = useState(false);
 
@@ -15,11 +16,78 @@ export default function WhatsAppSentConfirmToast() {
       }
     };
 
+    const handleDirectSent = (e) => {
+      if (e?.detail) {
+        setDirectSentData(e.detail);
+        setPromptData(null);
+        setTimeout(() => {
+          setDirectSentData(null);
+        }, 9000);
+      }
+    };
+
     window.addEventListener('whatsapp-confirm-prompt', handlePrompt);
+    window.addEventListener('whatsapp-direct-sent', handleDirectSent);
     return () => {
       window.removeEventListener('whatsapp-confirm-prompt', handlePrompt);
+      window.removeEventListener('whatsapp-direct-sent', handleDirectSent);
     };
   }, []);
+
+  if (directSentData) {
+    return (
+      <div className='fixed bottom-6 right-6 z-50 max-w-md w-full bg-slate-900/95 backdrop-blur-md text-white border border-emerald-500/50 rounded-2xl shadow-2xl p-4.5 animate-in slide-in-from-bottom duration-200 ring-1 ring-emerald-500/20'>
+        <div className='flex items-start justify-between gap-3'>
+          <div className='flex items-start gap-3 flex-1 min-w-0'>
+            <div className='w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/30 mt-0.5'>
+              <Check className='w-5 h-5 text-white stroke-[2.5]' />
+            </div>
+            <div className='flex-1 min-w-0'>
+              <div className='text-xs font-black text-emerald-400 flex items-center gap-1.5'>
+                <span>⚡ WhatsApp Message Sent Directly!</span>
+              </div>
+              <div className='text-sm font-bold text-white truncate mt-0.5'>
+                {directSentData.shopName}
+              </div>
+              <div className='text-[11px] text-slate-300 font-mono mt-0.5'>
+                +{directSentData.phone}
+              </div>
+              <div className='text-xs text-emerald-300/90 font-medium mt-1 leading-snug'>
+                Pitch delivered directly to shop owner via WhatsApp Cloud API without manual steps.
+              </div>
+
+              {/* Direct links to view the live chat thread */}
+              <div className='flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-slate-800'>
+                <a
+                  href='https://www.mrlads.com/conversations'
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  className='inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all'
+                >
+                  <MessageCircle className='w-3.5 h-3.5' />
+                  <span>View in WA Business ↗</span>
+                </a>
+                <a
+                  href='/whatsapp'
+                  className='inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-all'
+                >
+                  <span>In-App Chat Hub ↗</span>
+                </a>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setDirectSentData(null)}
+            className='text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer shrink-0'
+          >
+            <X className='w-4 h-4' />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+
 
   if (!promptData) return null;
 
