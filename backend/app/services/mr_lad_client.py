@@ -413,24 +413,47 @@ class MrLadWhatsAppClient:
         )
 
         try:
-            # ── PRIORITY CHECK: Existing conversation in Mr LAD ────────────
-            # If conversation already exists (e.g. admin +917780181920 or prior contacted shop),
-            # dispatch directly as free-text into the active thread. This avoids Meta #100 parameter errors!
+            # 1. Resolve or provision conversation in Mr LAD
             existing_conv_id = cls._find_conversation_id(recipient, token)
+
+            if not existing_conv_id:
+                # Auto-create conversation thread in Mr LAD via leads import without sending preliminary text messages
+                try:
+                    logger.info(f"[Mr LAD API] Provisioning conversation for {recipient} ({display_name}) via leads import...")
+                    import_res = _post(f"{api_base}/api/leads/import", {
+                        "leads": [
+                            {
+                                "name": display_name,
+                                "phone": f"+{recipient}",
+                                "company": display_name,
+                            }
+                        ]
+                    })
+                    if import_res.status_code == 200:
+                        c_ids = import_res.json().get("data", {}).get("conversation_ids", [])
+                        if c_ids:
+                            existing_conv_id = c_ids[0]
+                            logger.info(f"[Mr LAD API] Provisioned new conversation thread {existing_conv_id} for {recipient}.")
+                except Exception as imp_err:
+                    logger.warning(f"[Mr LAD API Leads Import Note] {imp_err}")
+
+                if not existing_conv_id:
+                    existing_conv_id = cls._find_conversation_id(recipient, token)
+
+            # 2. DISPATCH AS ONE SINGLE COMBINED MESSAGE (Flyer Image + Pitch Description Caption)
             if existing_conv_id:
-                logger.info(f"[Mr LAD API] Found active conversation {existing_conv_id} for {recipient}.")
                 flyers = cls._resolve_flyer_paths()
                 flyer_img = flyers.get("easybillbro") or flyers.get("lexonit")
 
-                # Single combined message: Flyer image + full pitch description
                 if send_flyer and flyer_img:
-                    logger.info(f"[Mr LAD API] Dispatching single combined message (image + description) to {recipient}...")
+                    logger.info(f"[Mr LAD API] Dispatching single combined message (image + description) to {recipient} ({existing_conv_id})...")
                     img_ok, img_id, img_data = cls.send_image_message(
                         conv_id=existing_conv_id,
                         img_path=flyer_img,
                         caption=outbound_message
                     )
                     if img_ok:
+                        logger.info(f"[Mr LAD API] Successfully dispatched flyer image with description in 1 message to {recipient} ({img_id})")
                         return True, img_id, {
                             "success": True,
                             "conversation_id": existing_conv_id,
@@ -438,22 +461,24 @@ class MrLadWhatsAppClient:
                             "data": img_data,
                             "mode": "image_with_caption"
                         }
-                    logger.warning(f"[Mr LAD API] Combined image send failed ({img_id}), falling back to text.")
+                    logger.warning(f"[Mr LAD API] Combined image send failed ({img_id}), attempting freetext into thread...")
 
+                # If no flyer requested or image failed, send freetext into the thread
                 ft_ok, ft_id, ft_data = _send_freetext(existing_conv_id, outbound_message)
-                return True, ft_id, {
-                    "success": True,
-                    "conversation_id": existing_conv_id,
-                    "message_id": ft_id,
-                    "data": ft_data,
-                    "mode": "existing_thread"
-                }
+                if ft_ok:
+                    return True, ft_id, {
+                        "success": True,
+                        "conversation_id": existing_conv_id,
+                        "message_id": ft_id,
+                        "data": ft_data,
+                        "mode": "existing_thread"
+                    }
 
-            # ── NEW CONTACT: Dispatch via send-template-to-members ─────────
+            # 3. FALLBACK ONLY: If conversation could not be created or direct send failed, use official pitch template
             if not language_code or language_code == "en":
                 language_code = "en_US"
 
-            logger.info(f"[Mr LAD API] Dispatching new contact template to {recipient} with template '{chosen_template}'...")
+            logger.info(f"[Mr LAD API] Fallback template dispatch to {recipient} with template '{chosen_template}'...")
             if template_parameters is not None:
                 params_list = template_parameters
             elif chosen_template == "lexon_official_pitch":
@@ -479,7 +504,6 @@ class MrLadWhatsAppClient:
             first_status = results[0].get("status") if results else ""
             if res.status_code != 200 or first_status == "failed":
                 err_text = (results[0].get("error") if results else None) or init_data.get("error") or init_data.get("message") or res.text
-                # Auto-retry with verified official pitch template if template was missing / translation failed (#132001)
                 if chosen_template != "lexon_official_pitch" or language_code != "en_US":
                     logger.info(f"[Mr LAD API] Template '{chosen_template}' failed ({err_text}). Retrying with 'lexon_official_pitch' (en_US)...")
                     chosen_template = "lexon_official_pitch"
@@ -497,43 +521,10 @@ class MrLadWhatsAppClient:
                 logger.error(f"[Mr LAD API Send Error {res.status_code}] {err_text}")
                 return False, f"HTTP {res.status_code}: {err_text}", init_data
 
-            conv_id = (results[0].get("conversation_id") or "") if results else ""
-            if not conv_id:
-                for attempt in range(5):
-                    time.sleep(1.0)
-                    conv_id = cls._find_conversation_id(recipient, token) or ""
-                    if conv_id:
-                        logger.info(f"[Mr LAD API] Discovered created conversation {conv_id} on retry {attempt + 1}")
-                        break
-
             msg_id = (results[0].get("message_id") or results[0].get("id") or "") if results else ""
             if not msg_id:
                 msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
-            logger.info(f"[Mr LAD API] Successfully sent template to {recipient} (Conv: {conv_id}, ID: {msg_id})")
-
-            # Follow up into opened thread with the flyer image + full description together as ONE message
-            if conv_id and send_flyer:
-                flyers = cls._resolve_flyer_paths()
-                flyer_img = flyers.get("easybillbro") or flyers.get("lexonit")
-                if flyer_img:
-                    try:
-                        time.sleep(1.0)
-                        img_ok, img_id, _ = cls.send_image_message(
-                            conv_id=conv_id,
-                            img_path=flyer_img,
-                            caption=outbound_message
-                        )
-                        if img_ok:
-                            logger.info(f"[Mr LAD API] Successfully sent flyer image with pitch description to {recipient} ({img_id})")
-                    except Exception as img_err:
-                        logger.warning(f"[Mr LAD API Follow-up Image with Description] {img_err}")
-            elif conv_id and outbound_message:
-                try:
-                    time.sleep(0.5)
-                    _send_freetext(conv_id, outbound_message)
-                except Exception as ft_err:
-                    logger.warning(f"[Mr LAD API Follow-up Note] {ft_err}")
-
+            logger.info(f"[Mr LAD API] Sent fallback template to {recipient} (ID: {msg_id})")
             return True, msg_id, init_data
 
         except Exception as e:
