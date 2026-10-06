@@ -39,9 +39,7 @@ services:
       - key: LAD_AUTH_EMAIL
         value: api@lexonit.com
       - key: LAD_AUTH_PASSWORD
-        sync: false
-      - key: LAD_API_TOKEN
-        sync: false
+        value: Solution@lit123
       - key: WHATSAPP_DEFAULT_TEMPLATE_NAME
         value: signup_otp
       - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN

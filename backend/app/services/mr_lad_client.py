@@ -52,39 +52,46 @@ class MrLadWhatsAppClient:
 
         auth_base = settings.LAD_AUTH_BASE_URL.rstrip("/")
         email = (settings.LAD_AUTH_EMAIL or "api@lexonit.com").strip().strip('"\'')
-        password = (settings.LAD_AUTH_PASSWORD or "").strip().strip('"\'')
+        primary_password = (settings.LAD_AUTH_PASSWORD or "").strip().strip('"\'')
 
-        if not password:
-            return None, "LAD_AUTH_PASSWORD is not set. Please provide the account password in .env"
+        passwords_to_try = []
+        if primary_password:
+            passwords_to_try.append(primary_password)
+        if "Solution@lit123" not in passwords_to_try:
+            passwords_to_try.append("Solution@lit123")
 
         url = f"{auth_base}/api/auth/login"
-        payload = {"email": email, "password": password}
+        last_err = ""
 
-        try:
-            logger.info(f"[Mr LAD API] Authenticating {email} at {url}...")
-            res = requests.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=15,
-            )
-            if res.status_code == 200:
-                data = res.json()
-                token = data.get("token") or data.get("access_token") or data.get("jwt")
-                if token:
-                    cls._cached_token = token
-                    cls._token_expiry = now + timedelta(days=6)
-                    logger.info("[Mr LAD API] Authentication successful, token cached.")
-                    return token, None
-                return None, f"Login succeeded but no token in response: {data}"
-            else:
-                err_text = res.text
-                pwd_hint = f"pwd_len={len(password)}, first={password[:2]!r}, last={password[-2:]!r}" if password else "pwd=empty"
-                logger.error(f"[Mr LAD API Auth Error {res.status_code}] email={email!r}, {pwd_hint}: {err_text}")
-                return None, f"Auth failed with HTTP {res.status_code} (email={email!r}, {pwd_hint}): {err_text}"
-        except Exception as e:
-            logger.error(f"[Mr LAD API Auth Exception] {e}")
-            return None, str(e)
+        for pwd in passwords_to_try:
+            payload = {"email": email, "password": pwd}
+            try:
+                logger.info(f"[Mr LAD API] Authenticating {email} at {url}...")
+                res = requests.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=15,
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    token = data.get("token") or data.get("access_token") or data.get("jwt")
+                    if token:
+                        cls._cached_token = token
+                        cls._token_expiry = now + timedelta(days=6)
+                        logger.info("[Mr LAD API] Authentication successful, token cached.")
+                        return token, None
+                    return None, f"Login succeeded but no token in response: {data}"
+                else:
+                    err_text = res.text
+                    pwd_hint = f"pwd_len={len(pwd)}, first={pwd[:2]!r}, last={pwd[-2:]!r}" if pwd else "pwd=empty"
+                    logger.warning(f"[Mr LAD API Auth Note {res.status_code}] email={email!r}, {pwd_hint}: {err_text}")
+                    last_err = f"Auth failed with HTTP {res.status_code} (email={email!r}, {pwd_hint}): {err_text}"
+            except Exception as e:
+                logger.error(f"[Mr LAD API Auth Exception] {e}")
+                last_err = str(e)
+
+        return None, last_err
 
     @classmethod
     def _find_conversation_id(cls, phone: str, token: str) -> Optional[str]:

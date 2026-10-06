@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     LAD_API_BASE_URL: str = "https://lad-waba-comms-stage-asia-axxjxdzmbq-el.a.run.app"
     LAD_AUTH_BASE_URL: str = "https://lad-backend-stage-axxjxdzmbq-uc.a.run.app"
     LAD_AUTH_EMAIL: str = "api@lexonit.com"
-    LAD_AUTH_PASSWORD: str = ""
+    LAD_AUTH_PASSWORD: str = "Solution@lit123"
     LAD_API_TOKEN: str = ""
     WHATSAPP_DEFAULT_TEMPLATE_NAME: str = "lexon_official_pitch"
 

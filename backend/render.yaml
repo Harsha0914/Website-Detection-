@@ -23,3 +23,27 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: WHATSAPP_PROVIDER
+        value: mr_lad
+      - key: WHATSAPP_PHONE_NUMBER
+        value: "+917780181920"
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        value: "1407135925808911"
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        value: "2912980445715643"
+      - key: LAD_API_BASE_URL
+        value: https://lad-waba-comms-stage-asia-axxjxdzmbq-el.a.run.app
+      - key: LAD_AUTH_BASE_URL
+        value: https://lad-backend-stage-axxjxdzmbq-uc.a.run.app
+      - key: LAD_AUTH_EMAIL
+        value: api@lexonit.com
+      - key: LAD_AUTH_PASSWORD
+        value: Solution@lit123
+      - key: WHATSAPP_DEFAULT_TEMPLATE_NAME
+        value: lexon_official_pitch
+      - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        value: shoppresence_whatsapp_webhook_token_123
+      - key: WHATSAPP_API_VERSION
+        value: v22.0
+      - key: WHATSAPP_IS_TEST_MODE
+        value: "false"
