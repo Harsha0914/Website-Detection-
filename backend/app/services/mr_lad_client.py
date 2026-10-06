@@ -249,8 +249,12 @@ class MrLadWhatsAppClient:
         """
         recipient = cls._clean_phone(to_phone)
         display_name = recipient_name or "Shop Owner"
-        chosen_template = template_name or getattr(settings, "WHATSAPP_DEFAULT_TEMPLATE_NAME", None) or "lexon_official_pitch"
-        if not chosen_template or chosen_template in ("hello_message", "website_presence_pitch", "lexon_website_outreach", "lexon_website_pitch"):
+        # Validate against known approved templates in Mr LAD account
+        approved_templates = {"lexon_official_pitch", "lexon_website_flyer_pitch"}
+        configured_template = template_name or getattr(settings, "WHATSAPP_DEFAULT_TEMPLATE_NAME", None)
+        if configured_template in approved_templates:
+            chosen_template = configured_template
+        else:
             chosen_template = "lexon_official_pitch"
 
         # Check for test mode or missing credentials
@@ -397,6 +401,21 @@ class MrLadWhatsAppClient:
 
             results = init_data.get("results", [])
             first_status = results[0].get("status") if results else ""
+            if res.status_code != 200 or first_status == "failed":
+                err_text = (results[0].get("error") if results else None) or init_data.get("error") or init_data.get("message") or res.text
+                # Auto-retry with verified official pitch template if template was missing / translation failed (#132001)
+                if chosen_template != "lexon_official_pitch" or language_code != "en_US":
+                    logger.info(f"[Mr LAD API] Template '{chosen_template}' failed ({err_text}). Retrying with 'lexon_official_pitch' (en_US)...")
+                    chosen_template = "lexon_official_pitch"
+                    language_code = "en_US"
+                    init_payload["template_name"] = "lexon_official_pitch"
+                    init_payload["language_code"] = "en_US"
+                    init_payload["members"][0]["params"] = [display_name, display_name]
+                    res = _post(f"{api_base}/api/conversations/send-template-to-members", init_payload)
+                    init_data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
+                    results = init_data.get("results", [])
+                    first_status = results[0].get("status") if results else ""
+
             if res.status_code != 200 or first_status == "failed":
                 err_text = (results[0].get("error") if results else None) or init_data.get("error") or init_data.get("message") or res.text
                 logger.error(f"[Mr LAD API Send Error {res.status_code}] {err_text}")

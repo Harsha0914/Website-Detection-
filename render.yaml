@@ -41,7 +41,7 @@ services:
       - key: LAD_AUTH_PASSWORD
         value: Solution@lit123
       - key: WHATSAPP_DEFAULT_TEMPLATE_NAME
-        value: signup_otp
+        value: lexon_official_pitch
       - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
         value: shoppresence_whatsapp_webhook_token_123
       - key: WHATSAPP_API_VERSION
