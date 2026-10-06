@@ -592,47 +592,24 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
                 whatsapp_sent = False
                 w_res = str(w_err)
 
-            # 3. Create outbound message record for text pitch
+            # 3. Create outbound message record for pitch with attached image flyer as single message
+            msg_body_record = (
+                f"[Attached: EasyBillBro Restaurant Billing & POS Flyer]\n\n{personalized_msg}"
+                if should_send_flyer
+                else personalized_msg
+            )
             outbound_msg = WhatsAppMessage(
                 conversation_id=conv.id,
                 direction=WhatsAppDirection.OUTBOUND,
                 sender_type=WhatsAppSenderType.AI_BOT if payload.auto_ai_enabled else WhatsAppSenderType.MANUAL_OPERATOR,
                 sender_name=payload.operator_name or "Lexon IT AI Assistant",
-                message_body=personalized_msg,
+                message_body=msg_body_record,
                 ai_generated=bool(payload.auto_ai_enabled),
                 status="sent" if whatsapp_sent else "failed",
                 is_read=True,
                 created_at=datetime.utcnow(),
             )
             db.add(outbound_msg)
-
-            # 4. If flyer was sent, also record both outbound flyer image messages in conversation
-            if whatsapp_sent and should_send_flyer:
-                outbound_flyer_msg1 = WhatsAppMessage(
-                    conversation_id=conv.id,
-                    direction=WhatsAppDirection.OUTBOUND,
-                    sender_type=WhatsAppSenderType.AI_BOT if payload.auto_ai_enabled else WhatsAppSenderType.MANUAL_OPERATOR,
-                    sender_name=payload.operator_name or "Lexon IT AI Assistant",
-                    message_body="[EasyBillBro Restaurant Billing & POS Flyer Attached]\nhttps://easybillbro.com",
-                    ai_generated=bool(payload.auto_ai_enabled),
-                    status="sent",
-                    is_read=True,
-                    created_at=datetime.utcnow(),
-                )
-                db.add(outbound_flyer_msg1)
-
-                outbound_flyer_msg2 = WhatsAppMessage(
-                    conversation_id=conv.id,
-                    direction=WhatsAppDirection.OUTBOUND,
-                    sender_type=WhatsAppSenderType.AI_BOT if payload.auto_ai_enabled else WhatsAppSenderType.MANUAL_OPERATOR,
-                    sender_name=payload.operator_name or "Lexon IT AI Assistant",
-                    message_body="[Lexon IT Official Website & App Pitch Flyer Attached]\nhttps://lexonit.com",
-                    ai_generated=bool(payload.auto_ai_enabled),
-                    status="sent",
-                    is_read=True,
-                    created_at=datetime.utcnow(),
-                )
-                db.add(outbound_flyer_msg2)
 
 
             # 4. Log AI outreach activity

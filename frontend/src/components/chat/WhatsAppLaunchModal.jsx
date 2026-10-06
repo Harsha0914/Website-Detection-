@@ -327,43 +327,28 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Attached Marketing Flyers (Both Images Auto-Sent With Chat) */}
+              {/* Attached Marketing Flyer (Sent with Pitch as Description in 1 Message) */}
               <div style={{ padding: '0 14px 12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#047857', textTransform: 'uppercase', letterSpacing: '.07em', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    📎 2 Attached Marketing Flyers
+                    📎 Attached Marketing Flyer
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: 10, border: '1px solid #a7f3d0' }}>
-                    Both auto-sent with chat
+                    Sent as 1 message (Image + Description)
                   </span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {/* Flyer 1: EasyBillBro */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '8px' }}>
-                    <img
-                      src="/images/easybillbro-flyer.jpg"
-                      alt="EasyBillBro Restaurant Billing Flyer"
-                      style={{ width: 40, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
-                    />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>EasyBillBro</div>
-                      <div style={{ fontSize: 10, color: '#64748b' }}>Billing & POS</div>
-                      <div style={{ fontSize: 9.5, color: '#059669', fontWeight: 700, marginTop: 2 }}>✓ Image 1</div>
-                    </div>
-                  </div>
-
-                  {/* Flyer 2: Lexon IT */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '8px' }}>
-                    <img
-                      src="/images/lexonit-flyer.jpg"
-                      alt="Lexon IT Website Development Flyer"
-                      style={{ width: 40, height: 54, objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
-                    />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Lexon IT</div>
-                      <div style={{ fontSize: 10, color: '#64748b' }}>Website & App</div>
-                      <div style={{ fontSize: 9.5, color: '#059669', fontWeight: 700, marginTop: 2 }}>✓ Image 2</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '10px 12px' }}>
+                  <img
+                    src="/images/easybillbro-flyer.jpg"
+                    alt="EasyBillBro Restaurant Billing Flyer"
+                    style={{ width: 48, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #cbd5e1', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
+                  />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0f172a' }}>EasyBillBro Restaurant Billing & POS</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Plans: Basic Rs 5K | Advanced Rs 7K | Pro Rs 10K</div>
+                    <div style={{ fontSize: 10.5, color: '#059669', fontWeight: 700, marginTop: 3 }}>
+                      ✓ Flyer image + pitch text sent together as ONE message
                     </div>
                   </div>
                 </div>
@@ -389,17 +374,17 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                   boxShadow: '0 4px 16px rgba(16,185,129,.35)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
-                title="Dispatches chat pitch and both marketing flyers directly via WhatsApp API"
+                title="Dispatches flyer image with pitch description in one combined WhatsApp message"
               >
                 {directSending ? (
                   <>
                     <Loader2 size={18} className="animate-spin text-white" />
-                    <span>Sending Pitch & Both Flyers via WhatsApp...</span>
+                    <span>Sending Flyer & Description as 1 Message...</span>
                   </>
                 ) : (
                   <>
                     <Zap size={18} fill="#fff" />
-                    <span>⚡ Send Pitch + 2 Flyers to {shopName} ({phoneDisplay})</span>
+                    <span>⚡ Send Flyer + Description in 1 Message ({phoneDisplay})</span>
                   </>
                 )}
               </button>

@@ -334,12 +334,29 @@ class MrLadWhatsAppClient:
             # dispatch directly as free-text into the active thread. This avoids Meta #100 parameter errors!
             existing_conv_id = cls._find_conversation_id(recipient, token)
             if existing_conv_id:
-                logger.info(f"[Mr LAD API] Found active conversation {existing_conv_id} for {recipient}. Dispatching free-text directly.")
+                logger.info(f"[Mr LAD API] Found active conversation {existing_conv_id} for {recipient}.")
+                flyers = cls._resolve_flyer_paths()
+                flyer_img = flyers.get("easybillbro") or flyers.get("lexonit")
+
+                # Single combined message: Flyer image + full pitch description
+                if send_flyer and flyer_img:
+                    logger.info(f"[Mr LAD API] Dispatching single combined message (image + description) to {recipient}...")
+                    img_ok, img_id, img_data = cls.send_image_message(
+                        conv_id=existing_conv_id,
+                        img_path=flyer_img,
+                        caption=outbound_message
+                    )
+                    if img_ok:
+                        return True, img_id, {
+                            "success": True,
+                            "conversation_id": existing_conv_id,
+                            "message_id": img_id,
+                            "data": img_data,
+                            "mode": "image_with_caption"
+                        }
+                    logger.warning(f"[Mr LAD API] Combined image send failed ({img_id}), falling back to text.")
+
                 ft_ok, ft_id, ft_data = _send_freetext(existing_conv_id, outbound_message)
-                if send_flyer:
-                    _send_both_flyers(existing_conv_id)
-
-
                 return True, ft_id, {
                     "success": True,
                     "conversation_id": existing_conv_id,
@@ -406,19 +423,26 @@ class MrLadWhatsAppClient:
                 msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
             logger.info(f"[Mr LAD API] Successfully sent template to {recipient} (Conv: {conv_id}, ID: {msg_id})")
 
-            # 1. Follow up with free-text message in the conversation thread
-            if conv_id and outbound_message:
+            # Follow up into opened thread with the flyer image + full description together as ONE message
+            if conv_id and send_flyer:
+                flyers = cls._resolve_flyer_paths()
+                flyer_img = flyers.get("easybillbro") or flyers.get("lexonit")
+                if flyer_img:
+                    try:
+                        time.sleep(0.5)
+                        cls.send_image_message(
+                            conv_id=conv_id,
+                            img_path=flyer_img,
+                            caption=outbound_message
+                        )
+                    except Exception as img_err:
+                        logger.warning(f"[Mr LAD API Follow-up Image with Description] {img_err}")
+            elif conv_id and outbound_message:
                 try:
                     time.sleep(0.5)
                     _send_freetext(conv_id, outbound_message)
                 except Exception as ft_err:
                     logger.warning(f"[Mr LAD API Follow-up Note] {ft_err}")
-
-            # 2. Follow up with BOTH marketing flyers (EasyBillBro + Lexon IT)
-            if send_flyer and conv_id:
-                _send_both_flyers(conv_id)
-
-
 
             return True, msg_id, init_data
 
