@@ -501,6 +501,62 @@ def simulate_incoming(payload: SimulateMessageSchema, db: Session = Depends(get_
     }
 
 
+# ─── 12a. Diagnostic: Test Flyer Send ────────────────────────────────────────
+@router.get("/test-flyer-send")
+def test_flyer_send(to_phone: str = Query("7780181920", description="Phone number to test send")):
+    """
+    Diagnostic endpoint: tests finding the flyer image and sending it via Mr LAD API.
+    Returns detailed status about the image resolution and API response.
+    """
+    from app.services.mr_lad_client import MrLadWhatsAppClient
+    import os
+
+    flyers = MrLadWhatsAppClient._resolve_flyer_paths()
+    img_path = flyers.get("easybillbro") or flyers.get("lexonit")
+
+    result = {
+        "flyer_paths_found": flyers,
+        "selected_image": img_path,
+        "image_exists_on_disk": os.path.exists(img_path) if img_path else False,
+        "cwd": os.getcwd(),
+        "to_phone": to_phone,
+    }
+
+    if not img_path:
+        result["status"] = "error"
+        result["error"] = "No flyer image found on disk"
+        return result
+
+    # Try to find a conversation for this phone
+    token, auth_err = MrLadWhatsAppClient.get_token()
+    if not token:
+        result["status"] = "error"
+        result["error"] = f"Auth failed: {auth_err}"
+        return result
+
+    clean = MrLadWhatsAppClient._clean_phone(to_phone)
+    conv_id = MrLadWhatsAppClient._find_conversation_id(clean, token)
+    result["conversation_id"] = conv_id
+
+    if not conv_id:
+        result["status"] = "error"
+        result["error"] = f"No conversation found for {clean}"
+        return result
+
+    # Attempt to send the flyer with a test caption
+    test_caption = "🧪 TEST: This is a flyer image + caption combined in ONE message from Lexon IT."
+    ok, msg_id, raw = MrLadWhatsAppClient.send_image_message(
+        conv_id=conv_id,
+        img_path=img_path,
+        caption=test_caption
+    )
+    result["send_success"] = ok
+    result["message_id"] = msg_id
+    result["api_response"] = raw
+    result["status"] = "success" if ok else "failed"
+    return result
+
+
 # ─── 12. Bulk AI WhatsApp Broadcast to Multiple Shops ────────────────────────
 @router.post("/broadcast-all")
 def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Session = Depends(get_db)):

@@ -115,26 +115,39 @@ class MrLadWhatsAppClient:
             pass
         return None
 
+    # Class-level cache for base64-encoded flyers (loaded once, reused)
+    _flyer_b64_cache: Dict[str, Optional[str]] = {}
+
     @classmethod
     def _resolve_flyer_paths(cls) -> Dict[str, Optional[str]]:
         import os
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        root_dir = os.path.abspath(os.path.join(base_dir, ".."))
+        # __file__ = backend/app/services/mr_lad_client.py
+        # Go up 2 levels -> backend/
+        services_dir = os.path.dirname(os.path.abspath(__file__))
+        app_dir = os.path.dirname(services_dir)        # backend/app/
+        backend_dir = os.path.dirname(app_dir)          # backend/
+        repo_dir = os.path.dirname(backend_dir)          # repo root
 
         def find_img(filename: str) -> Optional[str]:
             candidates = [
-                os.path.join(base_dir, "static", "images", filename),
-                os.path.join(root_dir, "backend", "static", "images", filename),
-                os.path.join(root_dir, "frontend", "public", "images", filename),
-                os.path.abspath(f"static/images/{filename}"),
-                os.path.abspath(f"backend/static/images/{filename}"),
-                os.path.abspath(f"frontend/public/images/{filename}"),
+                os.path.join(backend_dir, "static", "images", filename),
+                os.path.join(repo_dir, "backend", "static", "images", filename),
+                os.path.join(repo_dir, "frontend", "public", "images", filename),
+                os.path.join(os.getcwd(), "static", "images", filename),
+                os.path.join(os.getcwd(), "backend", "static", "images", filename),
+                # Render often runs from /app or /backend
+                f"/app/static/images/{filename}",
+                f"/app/backend/static/images/{filename}",
+                f"/backend/static/images/{filename}",
+                # Windows local dev
                 f"c:/Shop/backend/static/images/{filename}",
                 f"c:/Shop/frontend/public/images/{filename}",
             ]
             for c in candidates:
                 if os.path.exists(c):
+                    logger.debug(f"[Mr LAD Flyer] Found '{filename}' at: {c}")
                     return c
+            logger.warning(f"[Mr LAD Flyer] Could NOT find '{filename}'. Tried: {candidates[:5]}...")
             return None
 
         easybillbro = find_img("easybillbro-flyer.jpg") or find_img("easybillbro-flyer.png")
@@ -151,8 +164,24 @@ class MrLadWhatsAppClient:
         return paths.get("easybillbro") or paths.get("lexonit")
 
     @classmethod
-    def send_image_message(cls, conv_id: str, img_path: str, caption: str = "") -> Tuple[bool, str, dict]:
+    def _get_flyer_b64(cls, img_path: str) -> Optional[str]:
+        """Load and base64-encode a flyer image, using class-level cache."""
         import base64
+        if img_path in cls._flyer_b64_cache:
+            return cls._flyer_b64_cache[img_path]
+        try:
+            with open(img_path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            cls._flyer_b64_cache[img_path] = b64
+            logger.info(f"[Mr LAD Flyer] Cached base64 for '{img_path}' ({len(b64)} chars)")
+            return b64
+        except Exception as e:
+            logger.error(f"[Mr LAD Flyer] Failed to read/encode '{img_path}': {e}")
+            cls._flyer_b64_cache[img_path] = None
+            return None
+
+    @classmethod
+    def send_image_message(cls, conv_id: str, img_path: str, caption: str = "") -> Tuple[bool, str, dict]:
         token, _ = cls.get_token()
         if not token:
             return False, "Auth failed", {}
@@ -162,33 +191,50 @@ class MrLadWhatsAppClient:
             "Content-Type": "application/json",
         }
         content_type = "image/png" if img_path.lower().endswith(".png") else "image/jpeg"
+
+        b64 = cls._get_flyer_b64(img_path)
+        if not b64:
+            return False, f"Could not read image file: {img_path}", {}
+
+        payload = {
+            "type": "image",
+            "file_base64": b64,
+            "content_type": content_type,
+            "caption": caption,
+        }
         try:
-            with open(img_path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("utf-8")
-            payload = {
-                "type": "image",
-                "file_base64": b64,
-                "content_type": content_type,
-                "caption": caption
-            }
-            res = requests.post(f"{api_base}/api/conversations/{conv_id}/messages", headers=headers, json=payload, timeout=20)
+            url = f"{api_base}/api/conversations/{conv_id}/messages"
+            res = requests.post(url, headers=headers, json=payload, timeout=60)
+            logger.info(f"[Mr LAD Flyer API] HTTP {res.status_code} | conv={conv_id} | body={res.text[:300]}")
             if res.status_code == 200:
-                data = res.json()
-                if data.get("success"):
-                    inner = data.get("data", {})
-                    msg_id = inner.get("id") or inner.get("message_id") or f"wamid.LAD_{uuid.uuid4().hex[:12]}"
-                    logger.info(f"[Mr LAD API] Flyer image sent to conv {conv_id}. ID: {msg_id}")
+                try:
+                    data = res.json()
+                except Exception:
+                    data = {"raw": res.text}
+                # Accept success=true OR non-empty response as success
+                if data.get("success") or data.get("id") or data.get("data"):
+                    inner = data.get("data") or data
+                    if isinstance(inner, dict):
+                        msg_id = inner.get("id") or inner.get("message_id") or f"wamid.LAD_{uuid.uuid4().hex[:12]}"
+                    else:
+                        msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
+                    logger.info(f"[Mr LAD API] ✅ Flyer+caption sent to conv {conv_id}. ID: {msg_id}")
                     return True, msg_id, data
-            err_data = {}
-            try:
-                err_data = res.json()
-            except Exception:
-                pass
-            err = err_data.get("detail") or err_data.get("error") or res.text
-            logger.info(f"[Mr LAD API Flyer Image Note {res.status_code}] {err}")
-            return False, str(err), err_data
+                # API returned 200 but success=false — log and treat as failure
+                err = data.get("detail") or data.get("error") or data.get("message") or str(data)
+                logger.warning(f"[Mr LAD Flyer API] 200 but success=false: {err}")
+                return False, str(err), data
+            else:
+                err_data = {}
+                try:
+                    err_data = res.json()
+                except Exception:
+                    pass
+                err = err_data.get("detail") or err_data.get("error") or res.text
+                logger.warning(f"[Mr LAD Flyer API] HTTP {res.status_code}: {err}")
+                return False, str(err), err_data
         except Exception as e:
-            logger.warning(f"[Mr LAD API Flyer Image Exception] {e}")
+            logger.error(f"[Mr LAD Flyer API Exception] {e}")
             return False, str(e), {}
 
     @classmethod
