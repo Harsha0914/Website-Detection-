@@ -115,8 +115,9 @@ class MrLadWhatsAppClient:
             pass
         return None
 
-    # Class-level cache for base64-encoded flyers (loaded once, reused)
+    # Class-level caches for flyers (loaded once, reused)
     _flyer_b64_cache: Dict[str, Optional[str]] = {}
+    _media_id_cache: Dict[str, Optional[str]] = {}
 
     @classmethod
     def _resolve_flyer_paths(cls) -> Dict[str, Optional[str]]:
@@ -181,6 +182,33 @@ class MrLadWhatsAppClient:
             return None
 
     @classmethod
+    def _upload_media(cls, img_path: str, token: str) -> Optional[str]:
+        """Uploads flyer image via multipart/form-data to Meta media API and caches the media_id."""
+        if img_path in cls._media_id_cache and cls._media_id_cache[img_path]:
+            return cls._media_id_cache[img_path]
+
+        api_base = settings.LAD_API_BASE_URL.rstrip("/")
+        headers = {"Authorization": f"Bearer {token}"}
+        content_type = "image/png" if img_path.lower().endswith(".png") else "image/jpeg"
+        filename = os.path.basename(img_path)
+
+        try:
+            with open(img_path, "rb") as f:
+                files = {"file": (filename, f, content_type)}
+                res = requests.post(f"{api_base}/api/conversations/upload-media", headers=headers, files=files, timeout=30)
+            if res.status_code == 200:
+                data = res.json()
+                media_id = data.get("media_id")
+                if media_id:
+                    cls._media_id_cache[img_path] = media_id
+                    logger.info(f"[Mr LAD Flyer] Uploaded '{filename}' -> media_id: {media_id}")
+                    return media_id
+            logger.warning(f"[Mr LAD Flyer] Multipart upload returned {res.status_code}: {res.text[:200]}")
+        except Exception as e:
+            logger.warning(f"[Mr LAD Flyer] Multipart upload exception for '{img_path}': {e}")
+        return None
+
+    @classmethod
     def send_image_message(cls, conv_id: str, img_path: str, caption: str = "") -> Tuple[bool, str, dict]:
         token, _ = cls.get_token()
         if not token:
@@ -190,18 +218,27 @@ class MrLadWhatsAppClient:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        content_type = "image/png" if img_path.lower().endswith(".png") else "image/jpeg"
 
-        b64 = cls._get_flyer_b64(img_path)
-        if not b64:
-            return False, f"Could not read image file: {img_path}", {}
+        # Prefer Meta media_id via multipart upload for 100% reliable delivery without base64 limits
+        media_id = cls._upload_media(img_path, token)
+        if media_id:
+            payload = {
+                "type": "image",
+                "media_id": media_id,
+                "caption": caption,
+            }
+        else:
+            content_type = "image/png" if img_path.lower().endswith(".png") else "image/jpeg"
+            b64 = cls._get_flyer_b64(img_path)
+            if not b64:
+                return False, f"Could not read image file: {img_path}", {}
+            payload = {
+                "type": "image",
+                "file_base64": b64,
+                "content_type": content_type,
+                "caption": caption,
+            }
 
-        payload = {
-            "type": "image",
-            "file_base64": b64,
-            "content_type": content_type,
-            "caption": caption,
-        }
         try:
             url = f"{api_base}/api/conversations/{conv_id}/messages"
             res = requests.post(url, headers=headers, json=payload, timeout=60)
@@ -461,8 +498,12 @@ class MrLadWhatsAppClient:
 
             conv_id = (results[0].get("conversation_id") or "") if results else ""
             if not conv_id:
-                time.sleep(0.5)
-                conv_id = cls._find_conversation_id(recipient, token) or ""
+                for attempt in range(5):
+                    time.sleep(1.0)
+                    conv_id = cls._find_conversation_id(recipient, token) or ""
+                    if conv_id:
+                        logger.info(f"[Mr LAD API] Discovered created conversation {conv_id} on retry {attempt + 1}")
+                        break
 
             msg_id = (results[0].get("message_id") or results[0].get("id") or "") if results else ""
             if not msg_id:
@@ -475,12 +516,14 @@ class MrLadWhatsAppClient:
                 flyer_img = flyers.get("easybillbro") or flyers.get("lexonit")
                 if flyer_img:
                     try:
-                        time.sleep(0.5)
-                        cls.send_image_message(
+                        time.sleep(1.0)
+                        img_ok, img_id, _ = cls.send_image_message(
                             conv_id=conv_id,
                             img_path=flyer_img,
                             caption=outbound_message
                         )
+                        if img_ok:
+                            logger.info(f"[Mr LAD API] Successfully sent flyer image with pitch description to {recipient} ({img_id})")
                     except Exception as img_err:
                         logger.warning(f"[Mr LAD API Follow-up Image with Description] {img_err}")
             elif conv_id and outbound_message:
