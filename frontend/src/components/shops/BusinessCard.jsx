@@ -293,7 +293,7 @@ export function BusinessCard({ business, onSelect, isSelected = false }) {
                   ? 'bg-emerald-700 cursor-wait'
                   : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/20'
               }`}
-              title={`Auto-send WhatsApp pitch & EasyBillBro flyer to ${business.name} from +91 77801 81920`}
+              title={`Auto-send WhatsApp pitch & marketing flyers to ${business.name} (${displayPhone})`}
             >
               {isSendingPitch ? (
                 <>

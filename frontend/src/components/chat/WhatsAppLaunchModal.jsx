@@ -57,26 +57,21 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
   };
 
 
-  // Direct WhatsApp API Send (dispatches directly from website to shop owner and/or 7780181920)
+  // Direct WhatsApp API Send (dispatches directly from website to shop owner)
   const handleDirectSendAPI = async () => {
     if (!message.trim()) return;
     setDirectSending(true);
     try {
-      if (targetType === 'my_phone' || targetType === 'both') {
-        await sendDirectWhatsAppPitch({
-          ...business,
-          name: `${shopName} [Direct Pitch]`,
-          phone: '917780181920',
-        }, message);
+      const targetPhone = customPhone ? customPhone.replace(/\D/g, '') : shopPhoneDigits;
+      if (!targetPhone || targetPhone.length < 10) {
+        alert('Please provide a valid shop phone number');
+        setDirectSending(false);
+        return;
       }
-      if (targetType === 'shop' || targetType === 'both') {
-        if (shopPhoneDigits && !shopPhoneDigits.endsWith('7780181920')) {
-          await sendDirectWhatsAppPitch({
-            ...business,
-            phone: shopPhoneDigits,
-          }, message);
-        }
-      }
+      await sendDirectWhatsAppPitch({
+        ...business,
+        phone: targetPhone,
+      }, message, targetPhone);
       setDirectSuccess(true);
       setStep(2);
     } catch (err) {
@@ -87,11 +82,11 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
     }
   };
 
-  // Direct WhatsApp Launch (opens web/app with pre-filled message directly so chat is visible in WhatsApp)
+  // Direct WhatsApp Launch (opens web/app with pre-filled message directly to shop)
   const handleDirectLaunchWhatsApp = (mode = 'web') => {
     if (!message.trim()) return;
-    const numToUse = targetType === 'my_phone' ? '917780181920' : (shopPhoneDigits || '917780181920');
-    launchDirectWhatsAppChat(business, message, mode, numToUse);
+    const targetPhone = customPhone ? customPhone.replace(/\D/g, '') : shopPhoneDigits;
+    launchDirectWhatsAppChat(business, message, mode, targetPhone);
     setDirectSuccess(true);
     setStep(2);
     setTimeout(() => {
@@ -292,60 +287,18 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
             <>
 
 
-              {/* Recipient Target Selector */}
+              {/* Shop Target Destination */}
               <div style={{ padding: '12px 14px 4px' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
-                  Target Destination
+                  Shop Destination
                 </div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setTargetType('both')}
-                    style={{
-                      flex: 1, padding: '7px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                      border: targetType === 'both' ? '2px solid #059669' : '1px solid #e2e8f0',
-                      background: targetType === 'both' ? '#ecfdf5' : '#f8fafc',
-                      color: targetType === 'both' ? '#047857' : '#64748b',
-                      cursor: 'pointer', transition: 'all 0.15s'
-                    }}
-                  >
-                    🚀 Both (Shop & 7780181920)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTargetType('my_phone')}
-                    style={{
-                      flex: 1, padding: '7px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                      border: targetType === 'my_phone' ? '2px solid #059669' : '1px solid #e2e8f0',
-                      background: targetType === 'my_phone' ? '#ecfdf5' : '#f8fafc',
-                      color: targetType === 'my_phone' ? '#047857' : '#64748b',
-                      cursor: 'pointer', transition: 'all 0.15s'
-                    }}
-                  >
-                    📱 7780181920 WA
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTargetType('shop')}
-                    style={{
-                      flex: 1, padding: '7px 6px', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                      border: targetType === 'shop' ? '2px solid #059669' : '1px solid #e2e8f0',
-                      background: targetType === 'shop' ? '#ecfdf5' : '#f8fafc',
-                      color: targetType === 'shop' ? '#047857' : '#64748b',
-                      cursor: 'pointer', transition: 'all 0.15s'
-                    }}
-                  >
-                    🏪 Shop Only
-                  </button>
-                </div>
-                <div style={{ padding: '8px 12px', borderRadius: 12, fontSize: 12, fontWeight: 700, background: '#ecfdf5', border: '1px solid #10b981', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>
-                    {targetType === 'both' && `🏪 ${shopName} & 📱 +91 77801 81920`}
-                    {targetType === 'my_phone' && `📱 WA Business Account (+91 77801 81920)`}
-                    {targetType === 'shop' && `🏪 ${shopName}`}
+                <div style={{ padding: '10px 14px', borderRadius: 14, fontSize: 12.5, fontWeight: 700, background: '#f0fdf4', border: '1.5px solid #10b981', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(16,185,129,0.1)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>🏪</span>
+                    <span style={{ color: '#065f46', fontWeight: 800 }}>{shopName}</span>
                   </span>
-                  <span style={{ fontFamily: 'monospace', fontSize: 11 }}>
-                    {targetType === 'my_phone' ? '+917780181920' : phoneDisplay}
+                  <span style={{ fontFamily: 'monospace', fontSize: 12.5, color: '#047857', background: '#dcfce7', padding: '3px 10px', borderRadius: 8, border: '1px solid #86efac' }}>
+                    {phoneDisplay}
                   </span>
                 </div>
               </div>
@@ -446,7 +399,7 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                 ) : (
                   <>
                     <Zap size={18} fill="#fff" />
-                    <span>⚡ Send Pitch + 2 Flyers to WhatsApp ({targetType === 'both' ? 'Both' : (targetType === 'my_phone' ? '+917780181920' : (activePhone ? '+' + activePhone : 'Shop'))})</span>
+                    <span>⚡ Send Pitch + 2 Flyers to {shopName} ({phoneDisplay})</span>
                   </>
                 )}
               </button>

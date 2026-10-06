@@ -634,28 +634,6 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
                 )
                 db.add(outbound_flyer_msg2)
 
-                # Also sync into admin conversation in DB if target is a shop
-                if not norm_phone.endswith("7780181920"):
-                    try:
-                        admin_conv = get_or_create_whatsapp_conversation(
-                            db=db,
-                            phone_number="917780181920",
-                            shop_name="Harsha (Admin WA Business)",
-                        )
-                        admin_log_msg = WhatsAppMessage(
-                            conversation_id=admin_conv.id,
-                            direction=WhatsAppDirection.OUTBOUND,
-                            sender_type=WhatsAppSenderType.AI_BOT if payload.auto_ai_enabled else WhatsAppSenderType.MANUAL_OPERATOR,
-                            sender_name="System Synced Dispatch",
-                            message_body=f"📢 [Outbound to {s_name} (+{norm_phone})]:\n\n{personalized_msg}\n\n📎 Attached: EasyBillBro Flyer + Lexon IT Flyer",
-                            ai_generated=False,
-                            status="sent",
-                            is_read=True,
-                            created_at=datetime.utcnow(),
-                        )
-                        db.add(admin_log_msg)
-                    except Exception as db_sync_err:
-                        pass
 
             # 4. Log AI outreach activity
             if payload.auto_ai_enabled:

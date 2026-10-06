@@ -194,33 +194,10 @@ class MrLadWhatsAppClient:
     @classmethod
     def sync_to_admin(cls, message: str, shop_name: str, shop_phone: str, send_flyers: bool = True):
         """
-        Synchronizes the dispatched chat and marketing flyers to the admin's WhatsApp Business
-        account (+917780181920) in Mr LAD so both the WA account and Mr LAD dashboard are up to date.
+        Disabled: Outreach messages and marketing flyers are sent strictly to the shop's own number
+        and appear under the shop's conversation in Mr LAD, without polluting admin/Harsha's thread.
         """
-        admin_phone = "+917780181920"
-        try:
-            token, _ = cls.get_token()
-            if not token:
-                return
-            admin_conv_id = cls._find_conversation_id(admin_phone, token)
-            if not admin_conv_id:
-                return
-
-            api_base = settings.LAD_API_BASE_URL.rstrip("/")
-            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-            summary = f"📢 [Outbound to {shop_name} ({shop_phone})]:\n\n{message}"
-            requests.post(f"{api_base}/api/conversations/{admin_conv_id}/messages", headers=headers, json={"content": summary}, timeout=10)
-
-            if send_flyers:
-                flyers = cls._resolve_flyer_paths()
-                if flyers.get("easybillbro"):
-                    time.sleep(0.5)
-                    cls.send_image_message(admin_conv_id, flyers["easybillbro"], f"EasyBillBro Restaurant Billing Flyer -> Sent to {shop_name}")
-                if flyers.get("lexonit"):
-                    time.sleep(0.5)
-                    cls.send_image_message(admin_conv_id, flyers["lexonit"], f"Lexon IT Website Development Flyer -> Sent to {shop_name}")
-        except Exception as sync_err:
-            logger.warning(f"[Admin WhatsApp Sync Note] {sync_err}")
+        return
 
     @classmethod
     def send_message(
@@ -232,7 +209,7 @@ class MrLadWhatsAppClient:
         language_code: str = "en_US",
         template_parameters: Optional[List[str]] = None,
         send_flyer: bool = True,
-        sync_admin_copy: bool = True,
+        sync_admin_copy: bool = False,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Sends an outbound WhatsApp message via Mr LAD API.
@@ -362,8 +339,6 @@ class MrLadWhatsAppClient:
                 if send_flyer:
                     _send_both_flyers(existing_conv_id)
 
-                if sync_admin_copy and not recipient.endswith("7780181920"):
-                    cls.sync_to_admin(outbound_message, display_name, recipient, send_flyers=send_flyer)
 
                 return True, ft_id, {
                     "success": True,
@@ -443,9 +418,7 @@ class MrLadWhatsAppClient:
             if send_flyer and conv_id:
                 _send_both_flyers(conv_id)
 
-            # 3. Synchronize copy to admin WhatsApp Business account
-            if sync_admin_copy and not recipient.endswith("7780181920"):
-                cls.sync_to_admin(outbound_message, display_name, recipient, send_flyers=send_flyer)
+
 
             return True, msg_id, init_data
 
