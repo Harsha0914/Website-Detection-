@@ -35,13 +35,25 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.environ.get("DATABASE_URL") or f"sqlite:///{_DB_PATH}"
 
     # MongoDB
-    MONGODB_URI: str = os.environ.get("MONGODB_URI") or "mongodb+srv://harshavardhan_db_user:lhLFCsQF3TZgLbcv@cluster0.d65tyux.mongodb.net/shop_presence?appName=Cluster0&compressors=zlib"
+    # No default: MongoDB mirroring is simply disabled until MONGODB_URI is provided.
+    MONGODB_URI: str = os.environ.get("MONGODB_URI") or ""
     MONGODB_DB_NAME: str = os.environ.get("MONGODB_DB_NAME") or "shop_presence"
 
     # Admin Registration Secret Code
-    ADMIN_SECRET_CODE: str = "ADMIN2026"
+    # Admin self-registration is DISABLED unless this is set (use a long random value).
+    ADMIN_SECRET_CODE: str = ""
 
-    # JWT
+    # Google Sign-In: the OAuth client id the ID token must have been issued for.
+    GOOGLE_CLIENT_ID: str = ""
+
+    # Login / OTP abuse protection
+    RATE_LIMIT_ENABLED: bool = True
+    LOGIN_MAX_FAILURES: int = 5
+    LOGIN_LOCKOUT_MINUTES: int = 15
+    OTP_MAX_ATTEMPTS: int = 5
+    OTP_RESEND_COOLDOWN_SECONDS: int = 60
+
+    # JWT (must be overridden outside development: see validation at the bottom)
     JWT_SECRET_KEY: str = "shop-presence-development-jwt-secret-key-12345"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
@@ -52,10 +64,17 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",")]
+        # A wildcard is never honoured; *.vercel.app / *.pages.dev / *.onrender.com are
+        # allowed through allow_origin_regex in main.py, anything else must be listed.
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip() and o.strip() != "*"]
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() not in ("development", "dev", "local", "test", "testing")
 
     # Google Places
-    GOOGLE_PLACES_API_KEY: str = "AIzaSyCpffOtfEnMdrrv16_xnVxacUa1MgUMpvk"
+    # No default: without a key the OpenStreetMap provider is used.
+    GOOGLE_PLACES_API_KEY: str = ""
     USE_MOCK_PLACES: bool = False
 
     # Gemini AI
@@ -126,3 +145,18 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+
+_KNOWN_WEAK_JWT_SECRETS = {
+    "shop-presence-development-jwt-secret-key-12345",
+    "default-secret-key-change-in-production",
+    "change-this-to-a-long-random-secret-key-in-production",
+}
+
+if settings.JWT_SECRET_KEY in _KNOWN_WEAK_JWT_SECRETS or len(settings.JWT_SECRET_KEY) < 32:
+    if settings.is_production:
+        raise RuntimeError(
+            "JWT_SECRET_KEY is missing, too short (<32 chars) or a published default. "
+            "Set a long random JWT_SECRET_KEY, or set ENVIRONMENT=development for local work."
+        )
+    import warnings
+    warnings.warn("Using a weak JWT_SECRET_KEY: acceptable for development only.", stacklevel=2)

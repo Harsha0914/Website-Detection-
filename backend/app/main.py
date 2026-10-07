@@ -1,16 +1,15 @@
 import os
 # pyrefly: ignore [missing-import]
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 # pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
 # pyrefly: ignore [missing-import]
-from slowapi import Limiter, _rate_limit_exceeded_handler
-# pyrefly: ignore [missing-import]
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 # pyrefly: ignore [missing-import]
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
+from app.auth.dependencies import require_admin
 from app.database import engine, Base
 import app.models  # Ensure all models are registered with Base
 
@@ -90,7 +89,7 @@ def _ensure_sqlite_columns():
 
 _ensure_sqlite_columns()
 
-limiter = Limiter(key_func=get_remote_address)
+from app.rate_limit import limiter
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -115,10 +114,9 @@ app.add_middleware(
         "http://localhost:8001",
         "http://localhost",
         "http://127.0.0.1",
-        "https://vercel.com",
     ],
     allow_origin_regex=r"https://.*(\.vercel\.app|\.pages\.dev|\.onrender\.com)",
-    allow_credentials=True,
+    allow_credentials=False,  # auth is a Bearer header, never a cookie: nothing needs credentialed CORS
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -162,19 +160,11 @@ def root():
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    from app.mongodb import get_mongo_status
-    mongo_stat = get_mongo_status()
-    return {
-        "status": "healthy",
-        "database": "sqlite" if str(engine.url).startswith("sqlite") else "postgres",
-        "mongodb": {
-            "status": "connected" if mongo_stat.get("connected") else "disconnected",
-            "database": mongo_stat.get("database"),
-            "counts": mongo_stat.get("counts", {}),
-        }
-    }
+    """Public liveness probe: deliberately reveals nothing about infrastructure."""
+    return {"status": "healthy"}
 
-@app.get("/api/health/mongodb")
+
+@app.get("/api/health/mongodb", dependencies=[Depends(require_admin)])
 def mongodb_health():
     from app.mongodb import get_mongo_status
     return get_mongo_status()
