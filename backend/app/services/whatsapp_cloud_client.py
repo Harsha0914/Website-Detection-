@@ -76,7 +76,7 @@ class WhatsAppCloudClient:
         preview_url: bool = True,
         recipient_name: Optional[str] = None,
         template_name: Optional[str] = None,
-        send_flyer: bool = True,
+        send_flyer: bool = False,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Sends standard text message.

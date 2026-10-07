@@ -896,7 +896,22 @@ Generate the next WhatsApp response:"""
         reply = f"No problem at all. Thanks for letting us know! If you ever need a website or online presence in the future, feel free to message us anytime. Have a wonderful day! 😊"
         return reply, False, None
 
-    # Default Natural Fallback
+    # Default Natural Fallback: check if we already sent a welcome/pitch to avoid repeating 15 times
+    recent_outbounds = db.query(WhatsAppMessage).filter(
+        WhatsAppMessage.conversation_id == conversation.id,
+        WhatsAppMessage.direction == WhatsAppDirection.OUTBOUND
+    ).order_by(WhatsAppMessage.created_at.desc()).limit(5).all()
+
+    already_sent_pitch = any(
+        "Welcome to" in (m.message_body or "") or "We build professional" in (m.message_body or "") or "Lexon IT" in (m.message_body or "")
+        for m in recent_outbounds
+    )
+
+    if already_sent_pitch:
+        return (
+            f"Thank you for contacting {kb.company_name}! Our team has noted your message and a specialist will respond to you shortly. Feel free to let us know if you need any specific details in the meantime! 👍"
+        ), False, None
+
     return (
         f"Hello! 👋 Welcome to {kb.company_name}.\n\n"
         f"We build professional, mobile-friendly websites for local businesses with WhatsApp ordering starting from ₹{starting_price}.\n\n"

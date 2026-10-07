@@ -28,11 +28,14 @@ const PRESET_TEMPLATES = [
   },
 ];
 
+const BATCH_SIZE = 15;
+
 export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = [], onBroadcastComplete }) {
   const navigate = useNavigate();
 
+  const [selectedBatchIndex, setSelectedBatchIndex] = useState(0);
   const [selectedShopIds, setSelectedShopIds] = useState(() =>
-    new Set(shops.map((s, idx) => s.id || `shop_${idx}`))
+    new Set(shops.slice(0, BATCH_SIZE).map((s, idx) => s.id || `shop_${idx}`))
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState('lexon_official');
   const [messageText, setMessageText] = useState(PRESET_TEMPLATES[0].text);
@@ -46,10 +49,13 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
   const [sendResult, setSendResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // Sync selected shops if shops prop updates when opened
+  const totalBatches = Math.max(1, Math.ceil(shops.length / BATCH_SIZE));
+
+  // Sync selected shops (defaulting to the first batch of 15) when modal opens
   React.useEffect(() => {
     if (isOpen) {
-      setSelectedShopIds(new Set(shops.map((s, idx) => s.id || `shop_${idx}`)));
+      setSelectedBatchIndex(0);
+      setSelectedShopIds(new Set(shops.slice(0, BATCH_SIZE).map((s, idx) => s.id || `shop_${idx}`)));
       setIsComplete(false);
       setProgress(0);
       setSendResult(null);
@@ -58,6 +64,18 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
   }, [isOpen, shops]);
 
   if (!isOpen) return null;
+
+  const handleSelectBatch = (batchIdx) => {
+    setSelectedBatchIndex(batchIdx);
+    const start = batchIdx * BATCH_SIZE;
+    const batchShops = shops.slice(start, start + BATCH_SIZE);
+    setSelectedShopIds(new Set(batchShops.map((s, idx) => s.id || `shop_${start + idx}`)));
+  };
+
+  const handleSelectNextBatch = () => {
+    const nextIdx = (selectedBatchIndex + 1) % totalBatches;
+    handleSelectBatch(nextIdx);
+  };
 
   const toggleSelectShop = (shopId) => {
     setSelectedShopIds((prev) => {
@@ -336,28 +354,61 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
               </div>
 
               {/* Target Shop Selection List */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                    3. Target Recipients ({targetShops.length} of {shops.length} selected)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleSelectAll}
-                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
-                  >
-                    {selectedShopIds.size === shops.length ? (
-                      <>
-                        <Square className="w-3.5 h-3.5" />
-                        <span>Deselect All</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckSquare className="w-3.5 h-3.5" />
-                        <span>Select All ({shops.length})</span>
-                      </>
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                      3. Target Recipients ({targetShops.length} selected)
+                    </label>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      ⚡ 15 at a time
+                    </span>
+                  </div>
+
+                  {/* Batch Actions */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectBatch(0)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer border ${
+                        selectedBatchIndex === 0 && selectedShopIds.size === Math.min(BATCH_SIZE, shops.length)
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-800 hover:bg-emerald-100'
+                      }`}
+                      title="Select first 15 shops"
+                    >
+                      Select 1-15
+                    </button>
+
+                    {shops.length > BATCH_SIZE && (
+                      <button
+                        type="button"
+                        onClick={handleSelectNextBatch}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-300/60 dark:border-indigo-800 hover:bg-indigo-100 transition-colors cursor-pointer"
+                        title={`Select next batch of 15 shops (Batch ${(selectedBatchIndex + 1) % totalBatches + 1} of ${totalBatches})`}
+                      >
+                        Next 15 →
+                      </button>
                     )}
-                  </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSelectAll}
+                      className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 px-2 py-1 flex items-center gap-1"
+                    >
+                      {selectedShopIds.size === shops.length ? (
+                        <>
+                          <Square className="w-3 h-3" />
+                          <span>Deselect</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckSquare className="w-3 h-3" />
+                          <span>All ({shops.length})</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-2xl divide-y divide-slate-100 dark:divide-slate-800/60 bg-slate-50/40 dark:bg-slate-900/40 p-1">
@@ -385,6 +436,7 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
                           />
                           <div className="min-w-0">
                             <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              <span className="text-[10px] text-slate-400 font-mono mr-1.5">#{idx + 1}</span>
                               {shop.name}
                             </div>
                             <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -420,35 +472,32 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
                 </div>
               </div>
 
-              {/* Attached Flyers Info (Both Images) */}
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl space-y-2">
+              {/* Attached Marketing Flyer (EasyBillBro Restaurant Billing - Second Image) */}
+              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl space-y-2.5">
                 <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center justify-between">
-                  <span>📎 2 Attached Marketing Flyers</span>
-                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full">
-                    Both Auto-Sent With Chat
+                  <span className="flex items-center gap-1.5">
+                    <span>📎 Attached Marketing Flyer</span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">(Sent as 1 combined message)</span>
+                  </span>
+                  <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-2.5 py-0.5 rounded-full border border-emerald-300/50 dark:border-emerald-800">
+                    Auto-Attached with Pitch
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2 p-1.5 bg-white dark:bg-slate-900/80 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
-                    <img
-                      src="/images/easybillbro-flyer.jpg"
-                      alt="EasyBillBro Flyer"
-                      className="w-8 h-11 object-cover rounded border border-slate-200 dark:border-slate-700"
-                    />
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-bold text-slate-900 dark:text-white truncate">EasyBillBro</div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Restaurant POS</div>
+                <div className="flex items-center gap-3 p-2 bg-white dark:bg-slate-900/80 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 shadow-xs">
+                  <img
+                    src="/images/easybillbro-flyer.jpg"
+                    alt="EasyBillBro Restaurant Billing & POS Flyer"
+                    className="w-12 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-extrabold text-slate-900 dark:text-white">
+                      EasyBillBro — Restaurant Billing & POS
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 p-1.5 bg-white dark:bg-slate-900/80 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
-                    <img
-                      src="/images/lexonit-flyer.jpg"
-                      alt="Lexon IT Flyer"
-                      className="w-8 h-11 object-cover rounded border border-slate-200 dark:border-slate-700"
-                    />
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-bold text-slate-900 dark:text-white truncate">Lexon IT</div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Website & App</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                      High-resolution visual flyer attached directly alongside the Lexon IT pitch message.
+                    </div>
+                    <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
+                      easybillbro-flyer.jpg • 1 Image
                     </div>
                   </div>
                 </div>

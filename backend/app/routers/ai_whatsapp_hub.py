@@ -1,4 +1,5 @@
 import json
+import time
 from typing import List, Optional, Dict, Any
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request
@@ -579,7 +580,9 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
     results = []
     sent_count = 0
 
-    for shop in payload.shops:
+    for idx, shop in enumerate(payload.shops):
+        if idx > 0:
+            time.sleep(0.8)
         s_name = str(shop.get("name") or shop.get("shop_name") or "Local Shop").strip()
         raw_phone = str(shop.get("phone") or shop.get("phone_number") or "").strip()
         b_id = shop.get("business_id") or shop.get("id")

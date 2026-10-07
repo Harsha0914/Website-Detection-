@@ -495,7 +495,7 @@ def create_and_launch_campaign(
                 error_message=str(e),
             )
             db.add(rec)
-    
+
     campaign.status = CampaignStatus.COMPLETED
     campaign.completed_at = datetime.utcnow()
     db.commit()
@@ -508,59 +508,28 @@ def seed_default_templates(db: Session):
     existing = db.query(WhatsAppTemplate).first()
     if existing:
         return
-    
+
     templates = [
         WhatsAppTemplate(
-            name="website_launch_offer",
+            name="lexon_official_pitch",
             category="MARKETING",
             language="en",
-            header_text="🚀 Special Online Website Proposal for {{store_name}}",
+            header_text=None,
             body_text=(
-                "Namaste {{store_name}}! We noticed your shop does not have an official online ordering website. "
-                "Lexon IT helps local {{category}} shops get a modern mobile website with WhatsApp ordering, "
-                "Google Maps listing, and product catalog for just ₹2,999.\n\n"
-                "Would you like to see a free live demo for your store today?"
+                "Hello {{shop_name}},\n\n"
+                "This is Lexon IT. We help businesses grow online by building professional websites, "
+                "web applications, and mobile apps tailored to their needs.\n\n"
+                "We noticed that {{shop_name}} doesn't currently have a website. Today, customers often "
+                "search online before choosing a business or service. A professional online presence can "
+                "help you showcase your products or services, share important information, build trust, "
+                "and make it easier for customers to contact you \u2014 24/7.\n\n"
+                "Whether you need a simple website, an online booking or ordering system, a custom web "
+                "application, or a mobile app, our team can build it for you at an affordable price."
             ),
-            footer_text="Lexon IT Web Services",
-            variables_json=["store_name", "category"],
-            buttons_json=[
-                {"type": "QUICK_REPLY", "text": "Yes, show me demo"},
-                {"type": "QUICK_REPLY", "text": "Call me later"},
-            ],
-            meta_status="APPROVED",
-        ),
-        WhatsAppTemplate(
-            name="follow_up_website_pitch",
-            category="MARKETING",
-            language="en",
-            header_text="Website Upgrade for {{store_name}}",
-            body_text=(
-                "Hello {{store_name}} team! Following up on our website design offer. "
-                "Having your own website allows customers to browse items 24/7 and place direct WhatsApp orders.\n\n"
-                "Can we connect for a quick 2-minute call today?"
-            ),
-            footer_text="Lexon IT",
-            variables_json=["store_name"],
-            buttons_json=[
-                {"type": "QUICK_REPLY", "text": "Schedule Call"},
-                {"type": "QUICK_REPLY", "text": "Send Pricing PDF"},
-            ],
-            meta_status="APPROVED",
-        ),
-        WhatsAppTemplate(
-            name="proposal_ready",
-            category="UTILITY",
-            language="en",
-            header_text="Website Package Proposal Ready",
-            body_text=(
-                "Hi {{store_name}}! Your custom website design proposal and digital menu architecture are ready. "
-                "Check out the features including online catalogue, payment links, and instant WhatsApp alerts.\n\n"
-                "Reply YES to confirm your slot."
-            ),
-            footer_text="Lexon IT Solutions",
-            variables_json=["store_name"],
+            footer_text="Lexon IT & Web Solutions",
+            variables_json=["shop_name", "shop_name"],
             buttons_json=[],
-            meta_status="APPROVED",
+            meta_status="approved",
         ),
     ]
     for t in templates:

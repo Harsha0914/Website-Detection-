@@ -153,17 +153,15 @@ class MrLadWhatsAppClient:
             return None
 
         easybillbro = find_img("easybillbro-flyer.jpg") or find_img("easybillbro-flyer.png")
-        lexonit = find_img("lexonit-flyer.jpg") or find_img("template_header_sample.jpg")
 
         return {
             "easybillbro": easybillbro,
-            "lexonit": lexonit,
         }
 
     @classmethod
     def _resolve_flyer_path(cls) -> Optional[str]:
         paths = cls._resolve_flyer_paths()
-        return paths.get("easybillbro") or paths.get("lexonit")
+        return paths.get("easybillbro")
 
     @classmethod
     def _get_flyer_b64(cls, img_path: str) -> Optional[str]:
@@ -292,7 +290,7 @@ class MrLadWhatsAppClient:
         template_name: Optional[str] = None,
         language_code: str = "en_US",
         template_parameters: Optional[List[str]] = None,
-        send_flyer: bool = True,
+        send_flyer: bool = False,
         sync_admin_copy: bool = False,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
@@ -305,7 +303,7 @@ class MrLadWhatsAppClient:
         - For NEW contacts: uses POST /api/conversations/send-template-to-members
           to open the conversation (template required by Meta for first contact),
           then sends the real custom text as a follow-up free-text message.
-        - Sends BOTH marketing flyers (EasyBillBro Restaurant Billing + Lexon IT Website Development).
+        - Sends ONE marketing flyer (EasyBillBro Restaurant Billing) with the Lexon IT pitch as the image caption.
         - Automatically syncs a copy to the admin WhatsApp Business account (+917780181920).
         """
         recipient = cls._clean_phone(to_phone)
@@ -443,7 +441,7 @@ class MrLadWhatsAppClient:
             # 2. DISPATCH AS ONE SINGLE COMBINED MESSAGE (Flyer Image + Pitch Description Caption)
             if existing_conv_id:
                 flyers = cls._resolve_flyer_paths()
-                flyer_img = flyers.get("easybillbro") or flyers.get("lexonit")
+                flyer_img = flyers.get("easybillbro")
 
                 if send_flyer and flyer_img:
                     logger.info(f"[Mr LAD API] Dispatching single combined message (image + description) to {recipient} ({existing_conv_id})...")
@@ -637,21 +635,29 @@ class MrLadWhatsAppClient:
                     ).first()
 
                     if not existing:
-                        logger.info(f"[Mr LAD Sync] Found new inbound message {msg_id} from {clean_digits}: {text[:30]}")
+                        logger.info(f"[Mr LAD Sync] Synced message {msg_id} from {clean_digits}: {text[:30]}")
                         new_inbound_messages += 1
+
                         try:
-                            # Process incoming message to run AI response
-                            in_msg, out_msg, handoff = process_incoming_whatsapp_message(
-                                db=db,
-                                phone_number=clean_digits,
-                                message_text=text,
+                            from app.services.whatsapp_service import get_or_create_whatsapp_conversation
+                            conv = get_or_create_whatsapp_conversation(db=db, phone_number=clean_digits, shop_name=sender_name)
+                            
+                            hist_msg = WhatsAppMessage(
+                                conversation_id=conv.id,
+                                direction=WhatsAppDirection.INBOUND,
+                                sender_type=WhatsAppSenderType.CUSTOMER,
                                 sender_name=sender_name,
+                                message_body=text,
+                                status="received",
+                                is_read=True,
+                                external_message_id=str(msg_id),
+                                created_at=datetime.utcnow(),
                             )
-                            if in_msg:
-                                in_msg.external_message_id = str(msg_id)
-                                db.commit()
+                            db.add(hist_msg)
+                            conv.last_message_at = datetime.utcnow()
+                            db.commit()
                         except Exception as proc_err:
-                            logger.error(f"[Mr LAD Sync] Error processing incoming message: {proc_err}")
+                            logger.error(f"[Mr LAD Sync] Error syncing message: {proc_err}")
 
         return {
             "status": "success",
