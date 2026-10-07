@@ -33,7 +33,7 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       setMessage(buildMessage(business));
-      setTargetType('shop');
+      setTargetType('both');
       setCustomPhone('');
       setCopied(false);
       setOpening(false);
