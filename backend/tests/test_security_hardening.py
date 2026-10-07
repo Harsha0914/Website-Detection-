@@ -255,13 +255,28 @@ def _import_config(env_overrides):
                           capture_output=True, text=True)
 
 
-def test_production_refuses_to_start_with_default_or_weak_jwt_secret():
-    assert _import_config({"ENVIRONMENT": "production"}).returncode != 0
-    assert _import_config({"ENVIRONMENT": "production", "JWT_SECRET_KEY": "short"}).returncode != 0
-    assert _import_config({"ENVIRONMENT": "production",
-                           "JWT_SECRET_KEY": "default-secret-key-change-in-production"}).returncode != 0
-    assert _import_config({"ENVIRONMENT": "production", "JWT_SECRET_KEY": "x" * 48}).returncode == 0
-    assert _import_config({"ENVIRONMENT": "development"}).returncode == 0
+def _jwt_secret_in_subprocess(env_overrides):
+    env = {k: v for k, v in os.environ.items() if k not in ("JWT_SECRET_KEY", "ENVIRONMENT")}
+    env.update(env_overrides)
+    out = subprocess.run(
+        [sys.executable, "-W", "ignore", "-c", "from app.config import settings; print(settings.JWT_SECRET_KEY)"],
+        cwd=BACKEND_DIR, env=env, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return out.stdout.strip()
+
+
+def test_production_never_uses_a_published_or_weak_jwt_secret():
+    published = {"shop-presence-development-jwt-secret-key-12345", "default-secret-key-change-in-production"}
+    for override in ({}, {"JWT_SECRET_KEY": "short"},
+                     {"JWT_SECRET_KEY": "default-secret-key-change-in-production"}):
+        secret = _jwt_secret_in_subprocess({"ENVIRONMENT": "production", **override})
+        assert secret not in published and len(secret) >= 32
+    # random per process: two boots never share a key
+    assert _jwt_secret_in_subprocess({"ENVIRONMENT": "production"}) != _jwt_secret_in_subprocess({"ENVIRONMENT": "production"})
+
+
+def test_configured_jwt_secret_is_used_as_is():
+    assert _jwt_secret_in_subprocess({"ENVIRONMENT": "production", "JWT_SECRET_KEY": "x" * 48}) == "x" * 48
 
 
 def test_no_secrets_baked_into_source():

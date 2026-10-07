@@ -93,7 +93,8 @@ class Settings(BaseSettings):
     # Mr LAD API (LexonIT WhatsApp Integration)
     LAD_API_BASE_URL: str = "https://lad-waba-comms-stage-asia-axxjxdzmbq-el.a.run.app"
     LAD_AUTH_BASE_URL: str = "https://lad-backend-stage-axxjxdzmbq-uc.a.run.app"
-    LAD_AUTH_EMAIL: str = ""
+    # Account identifier (not a secret). The password must come from LAD_AUTH_PASSWORD.
+    LAD_AUTH_EMAIL: str = "api@lexonit.com"
     LAD_AUTH_PASSWORD: str = ""
     LAD_API_TOKEN: str = ""
     WHATSAPP_DEFAULT_TEMPLATE_NAME: str = "lexon_official_pitch"
@@ -153,10 +154,18 @@ _KNOWN_WEAK_JWT_SECRETS = {
 }
 
 if settings.JWT_SECRET_KEY in _KNOWN_WEAK_JWT_SECRETS or len(settings.JWT_SECRET_KEY) < 32:
-    if settings.is_production:
-        raise RuntimeError(
-            "JWT_SECRET_KEY is missing, too short (<32 chars) or a published default. "
-            "Set a long random JWT_SECRET_KEY, or set ENVIRONMENT=development for local work."
-        )
+    import secrets as _secrets
     import warnings
-    warnings.warn("Using a weak JWT_SECRET_KEY: acceptable for development only.", stacklevel=2)
+    if settings.is_production:
+        # Never run with a published/guessable signing key. Rather than crash a deployment
+        # that has not been configured yet, fall back to a random per-process secret:
+        # safe, but every restart signs all users out. Set JWT_SECRET_KEY to make it permanent
+        # (required as soon as more than one worker/instance is used).
+        settings.JWT_SECRET_KEY = _secrets.token_urlsafe(48)
+        warnings.warn(
+            "JWT_SECRET_KEY is missing/weak: using a random per-process secret. "
+            "Users are signed out on every restart. Set JWT_SECRET_KEY (32+ random chars).",
+            stacklevel=2,
+        )
+    else:
+        warnings.warn("Using a weak JWT_SECRET_KEY: acceptable for development only.", stacklevel=2)
