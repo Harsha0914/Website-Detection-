@@ -132,6 +132,7 @@ app.include_router(website.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(whatsapp.router)
+app.include_router(whatsapp.webhook_router)
 app.include_router(ai_whatsapp_hub.router)
 
 # Serve flyer image directly
@@ -182,13 +183,27 @@ def mongodb_health():
 @app.on_event("startup")
 async def start_whatsapp_background_poller():
     """
-    Background worker that continuously syncs incoming WhatsApp messages
-    from the Mr LAD API and automatically triggers the Website Detection AI sales assistant.
+    Background worker that syncs incoming WhatsApp messages from the Mr LAD API and runs
+    each new one through the same AI pipeline as the Meta webhook.
+
+    Safe by default: honours WHATSAPP_POLLER_ENABLED, polls every
+    WHATSAPP_POLL_INTERVAL_SECONDS (default 30s, minimum 10s), backs off on repeated
+    failures and logs errors instead of swallowing them.
     """
     import asyncio
+    import logging
+
+    if not settings.WHATSAPP_POLLER_ENABLED:
+        return
+    if (settings.WHATSAPP_PROVIDER or "").lower() != "mr_lad":
+        return
+
+    log = logging.getLogger("whatsapp.poller")
 
     async def _poller():
         await asyncio.sleep(2)
+        interval = max(10, int(settings.WHATSAPP_POLL_INTERVAL_SECONDS or 30))
+        failures = 0
         while True:
             try:
                 from app.database import SessionLocal
@@ -196,14 +211,18 @@ async def start_whatsapp_background_poller():
 
                 db = SessionLocal()
                 try:
-                    await asyncio.to_thread(MrLadWhatsAppClient.sync_recent_conversations, db)
+                    result = await asyncio.to_thread(MrLadWhatsAppClient.sync_recent_conversations, db)
                 finally:
                     db.close()
+                if result.get("status") == "error":
+                    failures += 1
+                    log.warning("WhatsApp sync error: %s", result.get("message"))
+                else:
+                    failures = 0
             except Exception:
-                pass
-            await asyncio.sleep(4)
+                failures += 1
+                log.exception("WhatsApp poller iteration failed")
+            # exponential back-off (max 10 minutes) while the gateway is failing
+            await asyncio.sleep(min(interval * (2 ** min(failures, 5)), 600) if failures else interval)
 
     asyncio.create_task(_poller())
-
-
-

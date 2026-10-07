@@ -74,8 +74,8 @@ class Settings(BaseSettings):
     # Mr LAD API (LexonIT WhatsApp Integration)
     LAD_API_BASE_URL: str = "https://lad-waba-comms-stage-asia-axxjxdzmbq-el.a.run.app"
     LAD_AUTH_BASE_URL: str = "https://lad-backend-stage-axxjxdzmbq-uc.a.run.app"
-    LAD_AUTH_EMAIL: str = "api@lexonit.com"
-    LAD_AUTH_PASSWORD: str = "Solution@lit123"
+    LAD_AUTH_EMAIL: str = ""
+    LAD_AUTH_PASSWORD: str = ""
     LAD_API_TOKEN: str = ""
     WHATSAPP_DEFAULT_TEMPLATE_NAME: str = "lexon_official_pitch"
 
@@ -84,8 +84,24 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_NUMBER_ID: str = "1407135925808911"
     WHATSAPP_BUSINESS_ACCOUNT_ID: str = "2912980445715643"
     WHATSAPP_API_VERSION: str = "v22.0"
-    WHATSAPP_WEBHOOK_VERIFY_TOKEN: str = "shoppresence_whatsapp_webhook_token_123"
+    # No default: the webhook handshake is refused until a token is configured.
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: str = ""
+    # Meta App Secret, used to verify X-Hub-Signature-256 on incoming webhooks.
+    WHATSAPP_APP_SECRET: str = ""
+    # Escape hatch for local development only; never enable in production.
+    WHATSAPP_ALLOW_UNSIGNED_WEBHOOK: bool = False
     WHATSAPP_IS_TEST_MODE: bool = False
+
+    # WhatsApp automation safety limits
+    WHATSAPP_DAILY_SEND_LIMIT: int = 200           # max outbound messages per rolling 24h
+    WHATSAPP_MAX_BROADCAST_BATCH: int = 50         # max recipients per broadcast request
+    WHATSAPP_BROADCAST_DELAY_SECONDS: float = 1.5  # pause between broadcast sends
+    WHATSAPP_REPEAT_COOLDOWN_DAYS: int = 7         # no repeat pitch to the same number inside this window
+    WHATSAPP_POLLER_ENABLED: bool = True
+    WHATSAPP_POLL_INTERVAL_SECONDS: int = 30
+    WHATSAPP_REPLY_MAX_AGE_MINUTES: int = 15       # never auto-reply to inbound messages older than this
+    # Optional: mirror outbound pitches to this admin number (e.g. +917780181920). Empty = disabled.
+    WHATSAPP_ADMIN_COPY_NUMBER: str = ""
 
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
