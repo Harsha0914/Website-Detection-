@@ -365,7 +365,7 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose }) {
                 </div>
                 <div style={{ marginTop: 6, fontSize: 10.5, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span>✓</span>
-                  <span>All outreach automatically mirrored to Mr LAD WhatsApp account (+91 77801 81920)</span>
+                  <span>Chat message will appear directly under this contact's conversation in Mr LAD</span>
                 </div>
               </div>
 
