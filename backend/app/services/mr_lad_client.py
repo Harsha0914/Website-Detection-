@@ -274,12 +274,57 @@ class MrLadWhatsAppClient:
             return False, str(e), {}
 
     @classmethod
-    def sync_to_admin(cls, message: str, shop_name: str, shop_phone: str, send_flyers: bool = True):
+    def sync_to_admin(cls, message: str, shop_name: str, shop_phone: str, send_flyer: bool = False):
         """
-        Disabled: Outreach messages and marketing flyers are sent strictly to the shop's own number
-        and appear under the shop's conversation in Mr LAD, without polluting admin/Harsha's thread.
+        Synchronizes every dispatched message and marketing flyer to the WhatsApp account
+        +917780181920 in Mr LAD so that all customer conversations & outreach appear
+        directly in this WhatsApp account in Mr LAD.
         """
-        return
+        admin_phone = "+917780181920"
+        try:
+            token, _ = cls.get_token()
+            if not token:
+                logger.warning("[Admin WhatsApp Sync] No token available for admin sync")
+                return
+
+            admin_conv_id = cls._find_conversation_id(admin_phone, token) or "9c8fdb44-e907-41ca-8cec-e80870473f84"
+
+            api_base = settings.LAD_API_BASE_URL.rstrip("/")
+            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+            summary = f"📢 [Outbound to {shop_name} ({shop_phone})]:\n\n{message}"
+
+            # If flyer was requested, dispatch flyer image with summary caption to admin thread
+            flyers = cls._resolve_flyer_paths()
+            flyer_img = flyers.get("easybillbro")
+            if send_flyer and flyer_img:
+                try:
+                    time.sleep(0.4)
+                    img_ok, img_id, _ = cls.send_image_message(
+                        conv_id=admin_conv_id,
+                        img_path=flyer_img,
+                        caption=summary
+                    )
+                    if img_ok:
+                        logger.info(f"[Admin WhatsApp Sync] ✅ Synced flyer image + message to admin thread {admin_conv_id} ({img_id})")
+                        return
+                except Exception as img_err:
+                    logger.warning(f"[Admin WhatsApp Sync Image Note] {img_err}")
+
+            # Send text summary into admin conversation thread
+            time.sleep(0.3)
+            r = requests.post(
+                f"{api_base}/api/conversations/{admin_conv_id}/messages",
+                headers=headers,
+                json={"content": summary},
+                timeout=15
+            )
+            if r.status_code == 200:
+                logger.info(f"[Admin WhatsApp Sync] ✅ Synced message to admin thread {admin_conv_id} for shop {shop_name}")
+            else:
+                logger.warning(f"[Admin WhatsApp Sync Note {r.status_code}] {r.text[:200]}")
+
+        except Exception as sync_err:
+            logger.warning(f"[Admin WhatsApp Sync Exception] {sync_err}")
 
     @classmethod
     def send_message(
@@ -291,7 +336,7 @@ class MrLadWhatsAppClient:
         language_code: str = "en_US",
         template_parameters: Optional[List[str]] = None,
         send_flyer: bool = False,
-        sync_admin_copy: bool = False,
+        sync_admin_copy: bool = True,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Sends an outbound WhatsApp message via Mr LAD API.
@@ -452,6 +497,8 @@ class MrLadWhatsAppClient:
                     )
                     if img_ok:
                         logger.info(f"[Mr LAD API] Successfully dispatched flyer image with description in 1 message to {recipient} ({img_id})")
+                        if sync_admin_copy and not recipient.endswith("7780181920"):
+                            cls.sync_to_admin(outbound_message, display_name, recipient, send_flyer=send_flyer)
                         return True, img_id, {
                             "success": True,
                             "conversation_id": existing_conv_id,
@@ -464,6 +511,8 @@ class MrLadWhatsAppClient:
                 # If no flyer requested or image failed, send freetext into the thread
                 ft_ok, ft_id, ft_data = _send_freetext(existing_conv_id, outbound_message)
                 if ft_ok:
+                    if sync_admin_copy and not recipient.endswith("7780181920"):
+                        cls.sync_to_admin(outbound_message, display_name, recipient, send_flyer=send_flyer)
                     return True, ft_id, {
                         "success": True,
                         "conversation_id": existing_conv_id,
@@ -523,6 +572,8 @@ class MrLadWhatsAppClient:
             if not msg_id:
                 msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
             logger.info(f"[Mr LAD API] Sent fallback template to {recipient} (ID: {msg_id})")
+            if sync_admin_copy and not recipient.endswith("7780181920"):
+                cls.sync_to_admin(outbound_message, display_name, recipient, send_flyer=send_flyer)
             return True, msg_id, init_data
 
         except Exception as e:

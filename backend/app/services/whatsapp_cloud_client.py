@@ -94,6 +94,7 @@ class WhatsAppCloudClient:
                 recipient_name=recipient_name,
                 template_name=template_name,
                 send_flyer=send_flyer,
+                sync_admin_copy=True,
             )
 
         settings = get_whatsapp_settings(db)

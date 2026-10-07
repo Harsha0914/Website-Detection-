@@ -33,3 +33,6 @@ backend/scratch/
 .env
 .env.*
 !.env.example
+
+.vercel
+.env*
