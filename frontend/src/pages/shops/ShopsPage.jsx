@@ -24,6 +24,7 @@ import {
   Bot,
   Star,
   ArrowUpDown,
+  AlertCircle,
 } from 'lucide-react';
 import Navbar from '../../components/layout/Navbar';
 import Footer from '../../components/layout/Footer';
@@ -114,7 +115,7 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     total, withWebsites, withoutWebsites, goodWebsites, needsImprovement,
     selectedBusinessId, setSelectedBusinessId, searchNearby,
     detectCurrentLocation, setSearchCenterFromPlace, setLocation, loading, error, apiError, errorType,
-    setRadius, setCategory, setKeyword, isDetectingLocation, debugInfo,
+    setRadius, setCategory, setKeyword, isDetectingLocation, debugInfo, providerUsed,
   } = useShopStore();
 
   const latitude  = searchCenter?.latitude;
@@ -313,6 +314,14 @@ export default function ShopsPage({ defaultTab = 'all' }) {
     unrated: 'Not rated yet',
   }[r] || 'selected');
 
+  const sourceLabel = !providerUsed || providerUsed === 'unknown'
+    ? null
+    : String(providerUsed).includes('GooglePlaces')
+    ? 'Google Maps (live)'
+    : providerUsed === 'SavedData'
+    ? 'Saved results'
+    : 'OpenStreetMap and saved results';
+
   const statusLine = loading
     ? `Searching within ${radiusKm} km…`
     : total > 0
@@ -330,6 +339,9 @@ export default function ShopsPage({ defaultTab = 'all' }) {
             <div className="min-w-0">
               <h1 className="ui-h1">Shops near {locationName}</h1>
               <p className="ui-lead" aria-live="polite">{statusLine}</p>
+              {sourceLabel && !loading && (
+                <p className="ui-help mt-1">Shop details from: <strong>{sourceLabel}</strong></p>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setShowModifyModal(true)} className="ui-btn ui-btn-secondary">
@@ -471,8 +483,8 @@ export default function ShopsPage({ defaultTab = 'all' }) {
           </section>
 
           {apiError && (
-            <div className="ui-notice ui-notice-error" role="alert">
-              <span className="ui-badge ui-badge-danger">{errorType || 'Notice'}</span>
+            <div className="ui-notice ui-notice-warning" role="alert">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
               <span>{apiError}</span>
             </div>
           )}

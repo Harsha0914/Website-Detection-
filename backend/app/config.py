@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     # No default: without a key the OpenStreetMap provider is used.
     GOOGLE_PLACES_API_KEY: str = ""
     USE_MOCK_PLACES: bool = False
+    # When a Google key is configured, search Google live and never replace its answer with saved
+    # (possibly stale or OpenStreetMap) rows. Set false only to save Google quota.
+    PLACES_PREFER_LIVE_GOOGLE: bool = True
 
     # Gemini AI
     GEMINI_API_KEY: str = ""

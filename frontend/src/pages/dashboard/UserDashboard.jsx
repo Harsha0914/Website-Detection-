@@ -116,6 +116,8 @@ export default function UserDashboard() {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleWorking, setGoogleWorking] = useState(false);
+  const [googleMessage, setGoogleMessage] = useState('');
 
   const matchingKeywordCategories = React.useMemo(() => {
     if (!keyword || !keyword.trim()) return [];
@@ -132,6 +134,8 @@ export default function UserDashboard() {
     try {
       const res = await api.get('/businesses/config/google-key-status');
       setGoogleConnected(res.data?.connected || false);
+      setGoogleWorking(res.data?.working || false);
+      setGoogleMessage(res.data?.message || '');
     } catch (_) {}
   };
 
@@ -469,15 +473,25 @@ export default function UserDashboard() {
           <section className="mt-8">
             <div className="ui-card ui-card-pad flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
               <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 mt-0.5 shrink-0" style={{ color: googleConnected ? 'var(--ui-success)' : 'var(--ui-muted)' }} aria-hidden="true" />
+                <MapPin
+                  className="h-5 w-5 mt-0.5 shrink-0"
+                  style={{ color: googleWorking ? 'var(--ui-success)' : googleConnected ? 'var(--ui-warning)' : 'var(--ui-muted)' }}
+                  aria-hidden="true"
+                />
                 <div>
                   <div className="font-semibold" style={{ color: 'var(--ui-text)' }}>
-                    Google Maps data: {googleConnected ? 'connected' : 'not connected'}
+                    {googleWorking
+                      ? 'Google Maps data: working'
+                      : googleConnected
+                      ? 'Google Maps key needs attention'
+                      : 'Google Maps data: not connected'}
                   </div>
                   <div className="ui-help">
-                    {googleConnected
-                      ? 'Results include Google ratings, photos and opening hours.'
-                      : 'Without it we use OpenStreetMap, which has fewer details. Connect a key for richer results.'}
+                    {googleWorking
+                      ? 'Results come live from Google, with its phone numbers, websites, ratings and photos.'
+                      : googleConnected
+                      ? googleMessage || 'Google did not accept the key.'
+                      : 'Without it we use OpenStreetMap, which has fewer details. Connect a key for complete, current shop details.'}
                   </div>
                 </div>
               </div>
