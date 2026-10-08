@@ -240,7 +240,7 @@ export async function broadcastWhatsAppToAllShops({ shops, customMessage, autoAI
  * Directly sends an outreach pitch or message to a specific shop person via Lexon IT WhatsApp API.
  * Dispatches directly along with the EasyBillBro Restaurant Billing flyer image.
  */
-export async function sendDirectWhatsAppPitch(business, customMessage = null, overridePhone = null, includeFlyer = true) {
+export async function sendDirectWhatsAppPitch(business, customMessage = null, overridePhone = null, includeFlyer = true, { silent = false } = {}) {
   const shopName = business?.name || business?.shop_name || 'Local Shop';
   const rawPhone = overridePhone || business?.phone || business?.phone_number || '';
 
@@ -286,11 +286,14 @@ export async function sendDirectWhatsAppPitch(business, customMessage = null, ov
       active_human_conversation: 'a team member is already chatting with this shop',
       duplicate_in_batch: 'duplicate number',
     };
-    throw new Error(`Message not sent: ${reasons[firstResult.error] || firstResult.error || 'blocked'}`);
+    const skipErr = new Error(`Message not sent: ${reasons[firstResult.error] || firstResult.error || 'blocked'}`);
+    skipErr.skipped = true;
+    skipErr.reason = firstResult.error;
+    throw skipErr;
   }
 
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(
+    if (!silent) window.dispatchEvent(
       new CustomEvent('whatsapp-direct-sent', {
         detail: {
           shopName,
