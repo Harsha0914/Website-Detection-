@@ -1,4 +1,5 @@
 import api from './api';
+import { fillTemplate, getTemplate } from './whatsappTemplates';
 
 /**
  * whatsappService.js
@@ -39,10 +40,7 @@ export function formatPhoneNumber(phone) {
  * Fills [Business Name] dynamically with the shop's name.
  */
 export function getLexonOutreachMessage(businessName) {
-  const name = businessName || 'Business Owner';
-  return `Hello ${name},\n\nThis is Lexon IT. We help businesses grow online by building professional websites, web applications, and mobile apps tailored to their needs.\n\nWe noticed that ${name} doesn’t currently have a website. Today, customers often search online before choosing a business or service. A professional online presence can help you showcase your products or services, share important information, build trust, and make it easier for customers to contact you — 24/7.\n\nWhether you need a simple website, an online booking or ordering system, a custom web application, or a mobile app, our team can build it for you at an affordable price.
-
-https://easybillbro.com/`;
+  return fillTemplate(getTemplate('offer-link').body, businessName || 'Business Owner');
 }
 
 export function getWhatsAppUrl(business, customMsg = null) {

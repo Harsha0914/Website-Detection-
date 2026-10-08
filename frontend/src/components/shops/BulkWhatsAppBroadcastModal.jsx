@@ -17,18 +17,15 @@ import {
   Square,
   Zap,
 } from 'lucide-react';
+import { WHATSAPP_TEMPLATES, DEFAULT_TEMPLATE_ID } from '../../services/whatsappTemplates';
 import { broadcastWhatsAppToAllShops, formatPhoneNumber, launchWhatsAppApp } from '../../services/whatsappService';
 
-const PRESET_TEMPLATES = [
-  {
-    id: 'lexon_official',
-    name: '🌟 Lexon IT Official Website & App Pitch',
-    badge: 'Official Template',
-    text: `Hello {shop_name},\n\nThis is Lexon IT. We help businesses grow online by building professional websites, web applications, and mobile apps tailored to their needs.\n\nWe noticed that {shop_name} doesn’t currently have a website. Today, customers often search online before choosing a business or service. A professional online presence can help you showcase your products or services, share important information, build trust, and make it easier for customers to contact you — 24/7.\n\nWhether you need a simple website, an online booking or ordering system, a custom web application, or a mobile app, our team can build it for you at an affordable price.
-
-https://easybillbro.com/`,
-  },
-];
+const PRESET_TEMPLATES = WHATSAPP_TEMPLATES.map((t) => ({
+  id: t.id,
+  name: t.name,
+  badge: t.includeFlyer ? 'With flyer' : 'Text only',
+  text: t.body,
+}));
 
 const BATCH_SIZE = 15;
 
@@ -39,7 +36,7 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
   const [selectedShopIds, setSelectedShopIds] = useState(() =>
     new Set(shops.slice(0, BATCH_SIZE).map((s, idx) => s.id || `shop_${idx}`))
   );
-  const [selectedTemplateId, setSelectedTemplateId] = useState('lexon_official');
+  const [selectedTemplateId, setSelectedTemplateId] = useState(DEFAULT_TEMPLATE_ID);
   const [messageText, setMessageText] = useState(PRESET_TEMPLATES[0].text);
   const [autoAIEnabled, setAutoAIEnabled] = useState(true);
 
