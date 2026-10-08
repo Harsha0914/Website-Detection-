@@ -16,7 +16,6 @@ from app.services.whatsapp_guard import (
     SendBlocked,
     can_message,
     delivery_status,
-    ensure_opt_out_footer,
     is_valid_phone,
 )
 from app.models.whatsapp import (
@@ -605,7 +604,6 @@ def broadcast_all_whatsapp_shops(payload: BulkWhatsAppBroadcastSchema, db: Sessi
     )
 
     template = payload.custom_message.strip() if payload.custom_message and payload.custom_message.strip() else default_template
-    template = ensure_opt_out_footer(template)
 
     results = []
     sent_count = 0
