@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { formatTimeIST, formatDateIST, formatYmdIST, daysAgoIST, parseServerDate } from '../../utils/time';
 import WhatsAppActivitySummary from '../../components/whatsapp/WhatsAppActivitySummary';
+import { listMessageImages } from '../../services/messageImages';
 import Navbar from '../../components/layout/Navbar';
 import Footer from '../../components/layout/Footer';
 import {
@@ -58,6 +59,27 @@ function dayLabel(value) {
 
 const cleanBody = (text) => (text || '').replace(/^🤖 \[(?:Lexon IT|Meta) AI Assistant\]: /, '');
 
+/**
+ * Messages sent with a picture are stored as "[Attached ...] text". Split that note from the text so the page can
+ * show the picture itself next to the words.
+ */
+const FLYER_NOTE = /^\[Attached: EasyBillBro Restaurant Billing & POS Flyer\]\s*/;
+const PICTURE_NOTE = /^\[Attached picture(?: #(\d+))?: ([^\]]*)\]\s*/;
+
+function splitAttachment(body) {
+  const text = cleanBody(body);
+  const flyer = FLYER_NOTE.exec(text);
+  if (flyer) return { attachment: { kind: 'flyer', label: 'EasyBillBro flyer' }, text: text.slice(flyer[0].length) };
+  const picture = PICTURE_NOTE.exec(text);
+  if (picture) return { attachment: { kind: 'picture', id: picture[1] ? Number(picture[1]) : null, label: picture[2] }, text: text.slice(picture[0].length) };
+  return { attachment: null, text };
+}
+
+const listPreview = (body) => {
+  const { attachment, text } = splitAttachment(body);
+  return attachment ? `📷 ${text.trim() || attachment.label}` : text;
+};
+
 /** Plain-language delivery state for messages we sent. */
 function DeliveryMark({ status }) {
   if (status === 'failed') {
@@ -94,6 +116,7 @@ export default function WhatsAppHubPage() {
   const selectedIdRef = useRef(null);
   const bottomRef = useRef(null);
   const chatCardRef = useRef(null);
+  const [pictureThumbs, setPictureThumbs] = useState({}); // picture id -> small preview, so sent pictures can be shown
   const conversationsRef = useRef([]);
   const [selectedDate, setSelectedDate] = useState(null); // an Indian calendar day (YYYY-MM-DD) or null
   const [dayInfo, setDayInfo] = useState(null);
@@ -135,6 +158,12 @@ export default function WhatsAppHubPage() {
       setLoading(false);
     }
   }, [selectConversation]);
+
+  useEffect(() => {
+    listMessageImages()
+      .then((data) => setPictureThumbs(Object.fromEntries((data.images || []).map((i) => [i.id, i.thumb]))))
+      .catch(() => { /* pictures simply show as a label if the list cannot be loaded */ });
+  }, []);
 
   useEffect(() => {
     fetchConversations();
@@ -351,7 +380,7 @@ export default function WhatsAppHubPage() {
                           </span>
                           <span className="block text-xs mt-0.5" style={{ color: 'var(--ui-muted)' }}>{prettyPhone(conv.phone_number)}</span>
                           <span className="block text-sm truncate mt-1" style={{ color: 'var(--ui-text-2)' }}>
-                            {cleanBody(conv.last_message) || 'No messages yet'}
+                            {listPreview(conv.last_message) || 'No messages yet'}
                           </span>
                           <span className={`ui-badge mt-2 ${conv.auto_ai_enabled ? 'ui-badge-success' : 'ui-badge-warning'}`}>
                             {conv.auto_ai_enabled ? 'AI replies on' : 'You reply'}
@@ -450,7 +479,21 @@ export default function WhatsAppHubPage() {
                             {incoming ? <Store className="h-3 w-3" aria-hidden="true" /> : isBot ? <Bot className="h-3 w-3" aria-hidden="true" /> : <UserCheck className="h-3 w-3" aria-hidden="true" />}
                             {who}
                           </p>
-                          <p className="whitespace-pre-wrap" style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>{cleanBody(m.message_body)}</p>
+                          {(() => {
+                            const { attachment, text } = splitAttachment(m.message_body);
+                            const src = attachment?.kind === 'flyer' ? '/images/easybillbro-flyer.jpg' : attachment?.id ? pictureThumbs[attachment.id] : null;
+                            return (
+                              <>
+                                {attachment && src && (
+                                  <img src={src} alt={`Picture sent with this message: ${attachment.label}`} className="rounded-xl mb-2 w-full" style={{ maxWidth: 320, maxHeight: 280, objectFit: 'cover', objectPosition: 'top' }} />
+                                )}
+                                {attachment && !src && (
+                                  <p className="ui-badge ui-badge-neutral mb-2" style={{ whiteSpace: 'normal' }}>Picture sent: {attachment.label}</p>
+                                )}
+                                <p className="whitespace-pre-wrap" style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>{text}</p>
+                              </>
+                            );
+                          })()}
                           <p className="mt-1 flex items-center justify-end gap-2 text-xs" style={{ color: 'var(--ui-muted)' }}>
                             <span>{timeOf(m.created_at)}</span>
                             {!incoming && <DeliveryMark status={m.status} />}
