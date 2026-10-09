@@ -8,6 +8,8 @@ import MessageImagePicker, { FLYER_VALUE, pictureSrc } from '../whatsapp/Message
 import { imageCategoryFor } from '../../utils/imageTools';
 
 const TEMPLATE_NOTE = {
+  lexon_offer_link_v3: 'the approved “offer with link” template',
+  lexon_about_company_v3: 'the approved “About Lexon IT” template',
   lexon_offer_link_v2: 'the approved “offer with link” template',
   lexon_about_company_v2: 'the approved “About Lexon IT” template',
 };
