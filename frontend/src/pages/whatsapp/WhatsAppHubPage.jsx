@@ -15,13 +15,14 @@ import {
   Store,
   Copy,
 } from 'lucide-react';
-import { formatTimeIST, formatDateIST, daysAgoIST, parseServerDate } from '../../utils/time';
+import { formatTimeIST, formatDateIST, formatYmdIST, daysAgoIST, parseServerDate } from '../../utils/time';
 import WhatsAppActivitySummary from '../../components/whatsapp/WhatsAppActivitySummary';
 import Navbar from '../../components/layout/Navbar';
 import Footer from '../../components/layout/Footer';
 import {
   getWhatsAppConversations,
   getWhatsAppConversation,
+  getWhatsAppDay,
   toggleWhatsAppAIBot,
   sendWhatsAppManualMessage,
   simulateIncomingWhatsAppMessage,
@@ -92,6 +93,11 @@ export default function WhatsAppHubPage() {
   const [sendError, setSendError] = useState('');
   const selectedIdRef = useRef(null);
   const bottomRef = useRef(null);
+  const chatCardRef = useRef(null);
+  const conversationsRef = useRef([]);
+  const [selectedDate, setSelectedDate] = useState(null); // an Indian calendar day (YYYY-MM-DD) or null
+  const [dayInfo, setDayInfo] = useState(null);
+  const [dayLoading, setDayLoading] = useState(false);
 
   const loadDetail = useCallback(async (conv) => {
     try {
@@ -220,9 +226,36 @@ export default function WhatsAppHubPage() {
     }
   };
 
+  conversationsRef.current = conversations;
+
+  // Picking a date shows only that day's chats and opens the first one.
+  useEffect(() => {
+    if (!selectedDate) {
+      setDayInfo(null);
+      setDayLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setDayLoading(true);
+    getWhatsAppDay(selectedDate)
+      .then((info) => {
+        if (cancelled) return;
+        setDayInfo(info);
+        const first = info.chats?.[0];
+        const conv = first && conversationsRef.current.find((c) => c.id === first.conversation_id);
+        if (conv && window.innerWidth >= 1024) selectConversation(conv);
+        chatCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      })
+      .catch(() => { if (!cancelled) setDayInfo(null); })
+      .finally(() => { if (!cancelled) setDayLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedDate, selectConversation]);
+
+  const dayIds = selectedDate && dayInfo ? new Set(dayInfo.chats.map((c) => c.conversation_id)) : null;
   const q = searchQuery.trim().toLowerCase();
   const filteredConversations = conversations.filter((c) =>
-    !q || c.shop_name?.toLowerCase().includes(q) || String(c.phone_number || '').includes(q.replace(/\D/g, '') || '\u0000'));
+    (!dayIds || dayIds.has(c.id)) &&
+    (!q || c.shop_name?.toLowerCase().includes(q) || String(c.phone_number || '').includes(q.replace(/\D/g, '') || '\u0000')));
 
   const aiOn = !!activeConvDetail?.auto_ai_enabled;
   const waDigits = selectedConv ? String(selectedConv.phone_number || '').replace(/\D/g, '') : '';
@@ -256,9 +289,9 @@ export default function WhatsAppHubPage() {
           </button>
         </header>
 
-        <WhatsAppActivitySummary />
+        <WhatsAppActivitySummary selectedDate={selectedDate} onSelectDate={setSelectedDate} dayInfo={dayInfo} dayLoading={dayLoading} />
 
-        <div className="ui-card overflow-hidden grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 min-w-0" style={{ minHeight: 600, height: 'calc(100vh - 230px)', maxHeight: 820 }}>
+        <div ref={chatCardRef} className="ui-card overflow-hidden grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 min-w-0" style={{ minHeight: 600, height: 'calc(100vh - 230px)', maxHeight: 820 }}>
           {/* ───────── Chat list ───────── */}
           <section
             aria-label="Chats"
@@ -280,12 +313,18 @@ export default function WhatsAppHubPage() {
                   autoComplete="off"
                 />
               </div>
+              {selectedDate && (
+                <div className="mt-2 flex items-center justify-between gap-2 text-sm rounded-lg px-3 py-2" style={{ background: 'var(--ui-primary-soft)', color: 'var(--ui-primary-text)' }} role="status">
+                  <span>Chats from <strong>{formatYmdIST(selectedDate)}</strong>{dayInfo ? ` (${dayInfo.chat_count})` : ''}</span>
+                  <button type="button" className="font-semibold underline" onClick={() => setSelectedDate(null)}>Show all</button>
+                </div>
+              )}
             </div>
 
             <ul className="flex-1 overflow-y-auto min-h-0" role="list">
               {filteredConversations.length === 0 ? (
                 <li className="p-8 text-center text-sm" style={{ color: 'var(--ui-muted)' }}>
-                  {loading ? 'Loading chats…' : conversations.length ? 'No chat matches your search.' : 'No chats yet. Send a message to a shop and it will show up here.'}
+                  {loading || dayLoading ? 'Loading chats…' : selectedDate && dayInfo && !dayInfo.chats.length ? 'No messages were sent or received on this day.' : conversations.length ? 'No chat matches your search.' : 'No chats yet. Send a message to a shop and it will show up here.'}
                 </li>
               ) : (
                 filteredConversations.map((conv) => {

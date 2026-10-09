@@ -49,3 +49,14 @@ export function daysAgoIST(value) {
   if (!d) return null;
   return Math.round(istDayNumber(new Date()) - istDayNumber(d));
 }
+
+/** Today's date in India as YYYY-MM-DD (the value a date picker uses). */
+export function todayIST() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: IST, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+/** A plain YYYY-MM-DD day (already an Indian calendar day) as readable text, e.g. "9 Oct 2026". */
+export function formatYmdIST(ymd, options = { day: 'numeric', month: 'short', year: 'numeric' }) {
+  if (!ymd) return '';
+  return formatDateIST(`${ymd}T06:30:00Z`, options); // noon in India, so no zone can shift the date
+}

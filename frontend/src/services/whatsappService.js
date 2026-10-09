@@ -147,6 +147,11 @@ export async function getWhatsAppSummary() {
   return res.data;
 }
 
+export async function getWhatsAppDay(date) {
+  const res = await api.get('/whatsapp/day', { params: { date } });
+  return res.data;
+}
+
 export async function getWhatsAppStats(period = 'today', startDate = null, endDate = null) {
   const params = { period };
   if (startDate) params.start_date = startDate;
