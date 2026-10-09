@@ -36,7 +36,6 @@ import Footer from '../../components/layout/Footer';
 import MobileBottomNav from '../../components/layout/MobileBottomNav';
 import { GooglePlacesAutocomplete } from '../../components/location/GooglePlacesAutocomplete';
 import GoogleMapsConnectModal from '../../components/common/GoogleMapsConnectModal';
-import WhatsAppAnalyticsDashboard from '../../components/dashboard/WhatsAppAnalyticsDashboard';
 import { useShopStore } from '../../store/shopStore';
 import api from '../../services/api';
 import { resolveKeywordToCategories } from '../../utils/searchMatcher';
@@ -499,12 +498,6 @@ export default function UserDashboard() {
                 {googleConnected ? 'Change key' : 'Connect Google Maps'}
               </button>
             </div>
-          </section>
-
-          {/* WhatsApp activity */}
-          <section className="mt-10" aria-labelledby="wa-title">
-            <h2 id="wa-title" className="ui-h2 mb-4">Your WhatsApp activity</h2>
-            <WhatsAppAnalyticsDashboard />
           </section>
         </div>
       </main>
