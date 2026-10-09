@@ -15,6 +15,7 @@ import {
   Store,
   Copy,
 } from 'lucide-react';
+import { formatTimeIST, formatDateIST, daysAgoIST, parseServerDate } from '../../utils/time';
 import Navbar from '../../components/layout/Navbar';
 import Footer from '../../components/layout/Footer';
 import {
@@ -34,30 +35,23 @@ function prettyPhone(raw) {
 }
 
 function timeOf(value) {
-  const d = value ? new Date(value) : null;
-  return d && !isNaN(d) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  return formatTimeIST(value);
 }
 
-/** Chat-list time: time today, "Yesterday", otherwise the date. */
+/** Chat-list time: the time if it is today (India), "Yesterday", otherwise the date. */
 function listTime(value) {
-  const d = value ? new Date(value) : null;
-  if (!d || isNaN(d)) return '';
-  const today = new Date();
-  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diffDays = Math.round((startOf(today) - startOf(d)) / 86400000);
-  if (diffDays === 0) return timeOf(value);
-  if (diffDays === 1) return 'Yesterday';
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  const ago = daysAgoIST(value);
+  if (ago === null) return '';
+  if (ago <= 0) return formatTimeIST(value);
+  if (ago === 1) return 'Yesterday';
+  return formatDateIST(value, { day: 'numeric', month: 'short' });
 }
 
 function dayLabel(value) {
-  const d = value ? new Date(value) : new Date();
-  const today = new Date();
-  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diffDays = Math.round((startOf(today) - startOf(d)) / 86400000);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  return d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+  const ago = daysAgoIST(value || new Date());
+  if (ago === null || ago <= 0) return 'Today';
+  if (ago === 1) return 'Yesterday';
+  return formatDateIST(value, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 const cleanBody = (text) => (text || '').replace(/^🤖 \[(?:Lexon IT|Meta) AI Assistant\]: /, '');
@@ -120,7 +114,7 @@ export default function WhatsAppHubPage() {
     if (!quiet) setLoading(true);
     try {
       const raw = await getWhatsAppConversations();
-      const list = [...raw].sort((a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0));
+      const list = [...raw].sort((a, b) => (parseServerDate(b.last_message_at)?.getTime() || 0) - (parseServerDate(a.last_message_at)?.getTime() || 0));
       setConversations(list);
       if (selectedIdRef.current == null && list.length > 0 && window.innerWidth >= 1024) {
         selectConversation(list[0]); // on a phone, start on the list instead
