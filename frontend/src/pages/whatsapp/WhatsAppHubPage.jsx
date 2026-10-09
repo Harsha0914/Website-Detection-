@@ -16,6 +16,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { formatTimeIST, formatDateIST, daysAgoIST, parseServerDate } from '../../utils/time';
+import WhatsAppActivitySummary from '../../components/whatsapp/WhatsAppActivitySummary';
 import Navbar from '../../components/layout/Navbar';
 import Footer from '../../components/layout/Footer';
 import {
@@ -254,6 +255,8 @@ export default function WhatsAppHubPage() {
             Refresh
           </button>
         </header>
+
+        <WhatsAppActivitySummary />
 
         <div className="ui-card overflow-hidden grid grid-cols-[minmax(0,1fr)] lg:grid-cols-12 min-w-0" style={{ minHeight: 600, height: 'calc(100vh - 230px)', maxHeight: 820 }}>
           {/* ───────── Chat list ───────── */}

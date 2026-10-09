@@ -142,6 +142,11 @@ export async function simulateIncomingWhatsAppMessage({ phone_number, shop_name,
   return res.data;
 }
 
+export async function getWhatsAppSummary() {
+  const res = await api.get('/whatsapp/summary');
+  return res.data;
+}
+
 export async function getWhatsAppStats(period = 'today', startDate = null, endDate = null) {
   const params = { period };
   if (startDate) params.start_date = startDate;
