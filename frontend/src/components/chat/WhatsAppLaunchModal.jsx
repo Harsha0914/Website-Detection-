@@ -10,7 +10,6 @@ import { imageCategoryFor } from '../../utils/imageTools';
 const TEMPLATE_NOTE = {
   lexon_offer_link_v2: 'the approved “offer with link” template',
   lexon_about_company_v2: 'the approved “About Lexon IT” template',
-  lexon_official_pitch: 'the older approved text template (the new one is still waiting for WhatsApp)',
 };
 
 const TEMPLATE_ICONS = { 'offer-link': Link2, 'about-company': Building2 };
@@ -245,8 +244,10 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
                   <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
                   <span>
                     <strong>{shopName} has not messaged you in the last 24 hours.</strong> WhatsApp then only allows an approved template as a first
-                    message, so this will be sent as {TEMPLATE_NOTE[sendMode.template] || `the approved template “${sendMode.template}”`}.
-                    Its wording and picture are fixed. Your edits and your own picture are used once the shop replies.
+                    message.{' '}
+                    {sendMode.template
+                      ? <>This will be sent as {TEMPLATE_NOTE[sendMode.template] || `the approved template “${sendMode.template}”`}. Its wording is fixed and it carries no picture. Your edits and your own picture are used once the shop replies.</>
+                      : <>The approved template for this message is not available yet, so it cannot be sent to this shop right now.</>}
                   </span>
                 </div>
               )}
