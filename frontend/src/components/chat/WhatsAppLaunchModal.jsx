@@ -4,6 +4,8 @@ import { X, Check, ArrowLeft, Copy, Loader2, Send, AlertCircle, MessageCircle, F
 import { Link } from 'react-router-dom';
 import { formatPhoneNumber, sendDirectWhatsAppPitch } from '../../services/whatsappService';
 import { WHATSAPP_TEMPLATES, getTemplate, fillTemplate } from '../../services/whatsappTemplates';
+import MessageImagePicker, { FLYER_VALUE, pictureSrc } from '../whatsapp/MessageImagePicker';
+import { imageCategoryFor } from '../../utils/imageTools';
 
 const TEMPLATE_ICONS = { 'offer-link': Link2, 'about-company': Building2 };
 
@@ -21,7 +23,7 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
   const [step, setStep] = useState('choose'); // 'choose' | 'edit' | 'sent'
   const [templateId, setTemplateId] = useState(null);
   const [message, setMessage] = useState('');
-  const [attachFlyer, setAttachFlyer] = useState(false);
+  const [image, setImage] = useState(null); // null = text only, or { kind: 'flyer' } / { kind: 'library', id, ... }
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -32,7 +34,7 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
     setStep('choose');
     setTemplateId(null);
     setMessage('');
-    setAttachFlyer(false);
+    setImage(null);
     setSending(false);
     setError('');
     setCopied(false);
@@ -56,7 +58,8 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
   const chooseTemplate = (t) => {
     setTemplateId(t.id);
     setMessage(fillTemplate(t.body, shopName));
-    setAttachFlyer(t.includeFlyer);
+    // keep a picture the user already chose; otherwise start from the template's default
+    setImage((current) => current ?? (t.includeFlyer ? FLYER_VALUE : null));
     setError('');
     setStep('edit');
   };
@@ -70,7 +73,9 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
     setSending(true);
     setError('');
     try {
-      await sendDirectWhatsAppPitch(business, message.trim(), phoneDigits, attachFlyer);
+      await sendDirectWhatsAppPitch(business, message.trim(), phoneDigits, image?.kind === 'flyer', {
+        imageId: image?.kind === 'library' ? image.id : null,
+      });
       setStep('sent');
       if (onSent) onSent();
     } catch (err) {
@@ -192,25 +197,19 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
                 </div>
               </div>
 
+              <MessageImagePicker value={image} onChange={setImage} category={imageCategoryFor(business?.category)} />
+
               <div>
                 <p className="ui-label">What {shopName} will see</p>
                 <div className="rounded-2xl p-3" style={{ background: 'var(--ui-surface-2)', border: '1px solid var(--ui-border)' }}>
                   <div className="ml-auto max-w-[92%] rounded-2xl px-3 py-3 text-sm" style={{ background: 'var(--ui-success-soft)', color: 'var(--ui-text)', border: '1px solid var(--ui-border)', borderBottomRightRadius: 4, overflowWrap: 'anywhere', lineHeight: 1.5 }}>
-                    {attachFlyer && (
-                      <img src="/images/easybillbro-flyer.jpg" alt="EasyBillBro flyer that is sent with the message" className="w-full rounded-xl mb-2" style={{ maxHeight: 360, objectFit: 'cover', objectPosition: 'top' }} />
+                    {image && (
+                      <img src={pictureSrc(image)} alt="The picture that is sent with the message" className="w-full rounded-xl mb-2" style={{ maxHeight: 360, objectFit: 'cover', objectPosition: image.kind === 'flyer' ? 'top' : 'center' }} />
                     )}
                     <div className="whitespace-pre-wrap px-1">{message.trim() || <span className="ui-muted">Your message is empty.</span>}</div>
                   </div>
                 </div>
               </div>
-
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" checked={attachFlyer} onChange={(e) => setAttachFlyer(e.target.checked)} className="mt-1 h-4 w-4" />
-                <span className="text-sm" style={{ color: 'var(--ui-text-2)' }}>
-                  <strong style={{ color: 'var(--ui-text)' }}>Send the EasyBillBro flyer image with this message</strong><br />
-                  The image and the text arrive together as one message.
-                </span>
-              </label>
 
               {!phoneDigits && (
                 <div className="ui-notice ui-notice-warning" role="alert">

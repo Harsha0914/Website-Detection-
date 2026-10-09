@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { sendDirectWhatsAppPitch, formatPhoneNumber } from '../../services/whatsappService';
 import { WHATSAPP_TEMPLATES, DEFAULT_TEMPLATE_ID, getTemplate, fillTemplate } from '../../services/whatsappTemplates';
+import MessageImagePicker, { FLYER_VALUE, pictureSrc } from '../whatsapp/MessageImagePicker';
+import { imageCategoryFor, dominantImageCategory } from '../../utils/imageTools';
 
 const GAP_BETWEEN_MESSAGES_MS = 2000; // a short pause between contacts keeps WhatsApp happy
 const SECONDS_PER_CONTACT = 4;        // rough, for the "about N minutes left" hint
@@ -48,7 +50,9 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
 
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID);
   const [message, setMessage] = useState(getTemplate(DEFAULT_TEMPLATE_ID).body);
-  const [attachFlyer, setAttachFlyer] = useState(getTemplate(DEFAULT_TEMPLATE_ID).includeFlyer);
+  const [image, setImage] = useState(getTemplate(DEFAULT_TEMPLATE_ID).includeFlyer ? FLYER_VALUE : null);
+  const [library, setLibrary] = useState([]);       // the account's pictures (loaded by the picker)
+  const [matchPerShop, setMatchPerShop] = useState(false); // use each shop's own type of picture when there is one
 
   const [queue, setQueue] = useState([]);
   const [running, setRunning] = useState(false);
@@ -129,7 +133,18 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
       const item = queueRef.current.find((x) => x.key === key);
       patch(key, { status: 'sending', note: '' });
       try {
-        const res = await sendDirectWhatsAppPitch(item.shop, fillTemplate(message, item.name), item.phone, attachFlyer, { silent: true });
+        // Which picture goes to THIS shop: its own type's picture if asked and available, else the chosen one.
+        let imageId = null;
+        let flyer = false;
+        if (matchPerShop) {
+          const match = library.find((i) => i.category === imageCategoryFor(item.shop.category));
+          if (match) imageId = match.id;
+        }
+        if (!imageId) {
+          if (image?.kind === 'library') imageId = image.id;
+          else if (image?.kind === 'flyer') flyer = true;
+        }
+        const res = await sendDirectWhatsAppPitch(item.shop, fillTemplate(message, item.name), item.phone, flyer, { silent: true, imageId });
         if (res?.status === 'failed') throw new Error(res.error || 'The message could not be sent');
         patch(key, { status: res?.status === 'simulated' ? 'test' : 'sent', note: '' });
       } catch (err) {
@@ -147,7 +162,7 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
       if (n < todo.length - 1 && !stopRef.current) await sleep(GAP_BETWEEN_MESSAGES_MS);
     }
     setRunning(false);
-  }, [message, attachFlyer]);
+  }, [message, image, library, matchPerShop]);
 
   // Tell the parent once, when everything that was going to be sent has finished.
   useEffect(() => {
@@ -186,7 +201,7 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
   const pickTemplate = (t) => {
     setTemplateId(t.id);
     setMessage(t.body);
-    setAttachFlyer(t.includeFlyer);
+    setImage((current) => current ?? (t.includeFlyer ? FLYER_VALUE : null));
   };
 
   if (!isOpen) return null;
@@ -329,24 +344,35 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
                 <p className="ui-help mt-1">The text <code>{'{shop_name}'}</code> is replaced with each shop's own name.</p>
               </div>
 
+              <MessageImagePicker
+                value={image}
+                onChange={setImage}
+                category={dominantImageCategory(contacts.filter((c) => selected.has(c.key)).map((c) => c.shop))}
+                onLibraryLoaded={setLibrary}
+              />
+
+              {library.length > 0 && (
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" checked={matchPerShop} onChange={(e) => setMatchPerShop(e.target.checked)} className="mt-1 h-4 w-4" />
+                  <span className="text-sm" style={{ color: 'var(--ui-text-2)' }}>
+                    <strong style={{ color: 'var(--ui-text)' }}>Use a matching picture for each shop's type</strong><br />
+                    A cafe gets one of your cafe pictures, a restaurant one of your restaurant pictures. Shops without a match get the picture chosen above.
+                  </span>
+                </label>
+              )}
+
               <div>
                 <p className="ui-label">Example for {previewName}</p>
                 <div className="rounded-2xl p-3" style={{ background: 'var(--ui-surface-2)', border: '1px solid var(--ui-border)' }}>
                   <div className="ml-auto max-w-[92%] rounded-2xl px-3 py-3 text-sm" style={{ background: 'var(--ui-success-soft)', color: 'var(--ui-text)', border: '1px solid var(--ui-border)', borderBottomRightRadius: 4, overflowWrap: 'anywhere', lineHeight: 1.5 }}>
-                    {attachFlyer && (
-                      <img src="/images/easybillbro-flyer.jpg" alt="EasyBillBro flyer that is sent with the message" className="w-full rounded-xl mb-2" style={{ maxHeight: 360, objectFit: 'cover', objectPosition: 'top' }} />
+                    {image && (
+                      <img src={pictureSrc(image)} alt="The picture that is sent with the message" className="w-full rounded-xl mb-2" style={{ maxHeight: 360, objectFit: 'cover', objectPosition: image.kind === 'flyer' ? 'top' : 'center' }} />
                     )}
                     <div className="whitespace-pre-wrap px-1">{fillTemplate(message, previewName).trim() || <span className="ui-muted">Your message is empty.</span>}</div>
                   </div>
                 </div>
               </div>
 
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" checked={attachFlyer} onChange={(e) => setAttachFlyer(e.target.checked)} className="mt-1 h-4 w-4" />
-                <span className="text-sm" style={{ color: 'var(--ui-text-2)' }}>
-                  <strong style={{ color: 'var(--ui-text)' }}>Send the EasyBillBro flyer image</strong> together with every message.
-                </span>
-              </label>
             </div>
 
             <div className="px-5 py-4 border-t flex flex-wrap items-center justify-between gap-2" style={{ borderColor: 'var(--ui-border)' }}>

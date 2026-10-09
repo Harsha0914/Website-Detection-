@@ -935,6 +935,37 @@ def update_requirements(
 # 13. WHATSAPP ANALYTICS
 # =============================================================================
 
+@router.get("/summary")
+def get_whatsapp_summary(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Today / yesterday / last 7 days / last 30 days for the signed-in account only
+    (messages sent, shops contacted, replies, failures) plus a 7-day chart. Days are Indian days.
+    """
+    from app.services.whatsapp_summary import build_summary
+
+    return build_summary(db, current_user.id)
+
+
+@router.get("/day")
+def get_whatsapp_day(
+    date: str = Query(..., description="An Indian calendar day, YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """The signed-in account's chats and message counts for one Indian day."""
+    from datetime import date as date_type
+    from app.services.whatsapp_summary import day_detail
+
+    try:
+        day = date_type.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Use a date like 2026-10-09")
+    return day_detail(db, current_user.id, day)
+
+
 @router.get("/stats")
 def get_whatsapp_stats(
     period: str = Query(
