@@ -27,6 +27,8 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [testState, setTestState] = useState({ busy: false, ok: '', error: '' });
   const dialogRef = useRef(null);
 
   useEffect(() => {
@@ -38,6 +40,8 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
     setSending(false);
     setError('');
     setCopied(false);
+    setTestPhone('');
+    setTestState({ busy: false, ok: '', error: '' });
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -82,6 +86,26 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
       setError(err?.message || 'The message could not be sent. Please try again.');
     } finally {
       setSending(false);
+    }
+  };
+
+  // Send exactly this message and picture to the user's OWN number, to see how it arrives on a phone.
+  const handleSendTest = async () => {
+    const digits = formatPhoneNumber(testPhone);
+    if (!digits) {
+      setTestState({ busy: false, ok: '', error: 'Please type your own WhatsApp number, for example 98765 43210.' });
+      return;
+    }
+    if (!message.trim()) return;
+    setTestState({ busy: true, ok: '', error: '' });
+    try {
+      await sendDirectWhatsAppPitch({ name: 'My test number' }, message.trim(), digits, image?.kind === 'flyer', {
+        imageId: image?.kind === 'library' ? image.id : null,
+        silent: true,
+      });
+      setTestState({ busy: false, ok: `Test sent to +${digits}. Open WhatsApp on that phone to see how it looks.`, error: '' });
+    } catch (err) {
+      setTestState({ busy: false, ok: '', error: err?.message || 'The test could not be sent.' });
     }
   };
 
@@ -210,6 +234,25 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
                   </div>
                 </div>
               </div>
+
+              <details className="rounded-xl p-3" style={{ border: '1px solid var(--ui-border)', background: 'var(--ui-surface-2)' }}>
+                <summary className="cursor-pointer text-sm font-semibold" style={{ color: 'var(--ui-text-2)' }}>
+                  Send a test to my own number first
+                </summary>
+                <p className="ui-help mt-2">Sends this exact message and picture to your own WhatsApp number, not to the shop, so you can see how it arrives.</p>
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <div className="flex-1 min-w-[180px]">
+                    <label htmlFor="wa-test-phone" className="ui-label">Your WhatsApp number</label>
+                    <input id="wa-test-phone" type="tel" inputMode="tel" className="ui-input" placeholder="98765 43210" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} autoComplete="tel" />
+                  </div>
+                  <button type="button" className="ui-btn ui-btn-secondary" onClick={handleSendTest} disabled={testState.busy || !message.trim()}>
+                    {testState.busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+                    {testState.busy ? 'Sending…' : 'Send test to me'}
+                  </button>
+                </div>
+                {testState.ok && <p className="ui-notice ui-notice-success mt-2" role="status">{testState.ok}</p>}
+                {testState.error && <p className="ui-notice ui-notice-error mt-2" role="alert">{testState.error}</p>}
+              </details>
 
               {!phoneDigits && (
                 <div className="ui-notice ui-notice-warning" role="alert">
