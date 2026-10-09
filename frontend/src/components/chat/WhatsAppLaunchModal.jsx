@@ -2,10 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, ArrowLeft, Copy, Loader2, Send, AlertCircle, MessageCircle, FileText, Link2, Building2, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { formatPhoneNumber, sendDirectWhatsAppPitch } from '../../services/whatsappService';
+import { formatPhoneNumber, sendDirectWhatsAppPitch, getWhatsAppSendMode } from '../../services/whatsappService';
 import { WHATSAPP_TEMPLATES, getTemplate, fillTemplate } from '../../services/whatsappTemplates';
 import MessageImagePicker, { FLYER_VALUE, pictureSrc } from '../whatsapp/MessageImagePicker';
 import { imageCategoryFor } from '../../utils/imageTools';
+
+const TEMPLATE_NOTE = {
+  lexon_offer_link_v1: 'the approved “offer with link” template',
+  lexon_about_company_v1: 'the approved “About Lexon IT” template',
+  lexon_official_pitch: 'the older approved text template (the new one is still waiting for WhatsApp)',
+};
 
 const TEMPLATE_ICONS = { 'offer-link': Link2, 'about-company': Building2 };
 
@@ -28,6 +34,7 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [testPhone, setTestPhone] = useState('');
+  const [sendMode, setSendMode] = useState(null); // how this shop can really be messaged (24-hour rule)
   const [testState, setTestState] = useState({ busy: false, ok: '', error: '' });
   const dialogRef = useRef(null);
 
@@ -41,6 +48,7 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
     setError('');
     setCopied(false);
     setTestPhone('');
+    setSendMode(null);
     setTestState({ busy: false, ok: '', error: '' });
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -52,6 +60,16 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
       window.removeEventListener('keydown', onKey);
     };
   }, [isOpen, business?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isOpen || step !== 'edit' || !phoneDigits || !templateId) return undefined;
+    let cancelled = false;
+    setSendMode(null);
+    getWhatsAppSendMode(phoneDigits, templateId)
+      .then((info) => { if (!cancelled) setSendMode(info); })
+      .catch(() => { /* the note is only guidance; sending still works without it */ });
+    return () => { cancelled = true; };
+  }, [isOpen, step, phoneDigits, templateId]);
 
   if (!isOpen || !business) return null;
 
@@ -79,6 +97,7 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
     try {
       await sendDirectWhatsAppPitch(business, message.trim(), phoneDigits, image?.kind === 'flyer', {
         imageId: image?.kind === 'library' ? image.id : null,
+        templateKey: templateId,
       });
       setStep('sent');
       if (onSent) onSent();
@@ -220,6 +239,17 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
                   )}
                 </div>
               </div>
+
+              {sendMode?.mode === 'template' && (
+                <div className="ui-notice ui-notice-warning" role="status">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    <strong>{shopName} has not messaged you in the last 24 hours.</strong> WhatsApp then only allows an approved template as a first
+                    message, so this will be sent as {TEMPLATE_NOTE[sendMode.template] || `the approved template “${sendMode.template}”`}.
+                    Its wording and picture are fixed. Your edits and your own picture are used once the shop replies.
+                  </span>
+                </div>
+              )}
 
               <MessageImagePicker value={image} onChange={setImage} category={imageCategoryFor(business?.category)} />
 
