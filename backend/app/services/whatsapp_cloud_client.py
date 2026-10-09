@@ -79,6 +79,8 @@ class WhatsAppCloudClient:
         send_flyer: bool = False,
         enforce_gate: bool = True,
         image_path: Optional[str] = None,
+        image_url: Optional[str] = None,
+        template_key: Optional[str] = None,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Sends standard text message.
@@ -108,6 +110,8 @@ class WhatsAppCloudClient:
                 send_flyer=send_flyer,
                 sync_admin_copy=True,
                 image_path=image_path,
+                image_url=image_url,
+                template_key=template_key,
             )
 
         settings = get_whatsapp_settings(db)

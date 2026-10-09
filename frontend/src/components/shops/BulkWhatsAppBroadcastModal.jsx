@@ -144,7 +144,7 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
           if (image?.kind === 'library') imageId = image.id;
           else if (image?.kind === 'flyer') flyer = true;
         }
-        const res = await sendDirectWhatsAppPitch(item.shop, fillTemplate(message, item.name), item.phone, flyer, { silent: true, imageId });
+        const res = await sendDirectWhatsAppPitch(item.shop, fillTemplate(message, item.name), item.phone, flyer, { silent: true, imageId, templateKey: templateId });
         if (res?.status === 'failed') throw new Error(res.error || 'The message could not be sent');
         patch(key, { status: res?.status === 'simulated' ? 'test' : 'sent', note: '' });
       } catch (err) {
@@ -162,7 +162,7 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
       if (n < todo.length - 1 && !stopRef.current) await sleep(GAP_BETWEEN_MESSAGES_MS);
     }
     setRunning(false);
-  }, [message, image, library, matchPerShop]);
+  }, [message, image, library, matchPerShop, templateId]);
 
   // Tell the parent once, when everything that was going to be sent has finished.
   useEffect(() => {
@@ -342,6 +342,14 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
                 <label htmlFor="bulk-message" className="ui-label">Message <span className="ui-muted">(you can edit it)</span></label>
                 <textarea id="bulk-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={8} className="ui-input" style={{ lineHeight: 1.55, resize: 'vertical', minHeight: 150 }} />
                 <p className="ui-help mt-1">The text <code>{'{shop_name}'}</code> is replaced with each shop's own name.</p>
+              </div>
+
+              <div className="ui-notice ui-notice-info" role="note">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+                <span>
+                  WhatsApp only allows free text and your own pictures to shops that messaged you in the last 24 hours. For every other shop the first
+                  message goes as the approved template for this message, with fixed wording and picture.
+                </span>
               </div>
 
               <MessageImagePicker

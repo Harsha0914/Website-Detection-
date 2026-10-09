@@ -93,6 +93,69 @@ class MrLadWhatsAppClient:
 
         return None, last_err
 
+    # WhatsApp only lets a business send free text or a picture to someone who messaged it in the last 24 hours.
+    # Anyone else (every shop that has not replied) can only be sent an APPROVED TEMPLATE.
+    # Which approved template carries each of the app's two messages, best first:
+    TEMPLATE_PREFERENCE: Dict[str, List[str]] = {
+        "offer-link": ["lexon_offer_link_v1", "lexon_official_pitch"],
+        "about-company": ["lexon_about_company_v1", "lexon_official_pitch"],
+    }
+    DEFAULT_TEMPLATE = "lexon_official_pitch"
+
+    _templates_cache: Tuple[float, Dict[str, Dict[str, Any]]] = (0.0, {})
+
+    @classmethod
+    def list_templates(cls, max_age: float = 300.0) -> Dict[str, Dict[str, Any]]:
+        """{template name: {status, header_type}} from the gateway, cached for 5 minutes. {} if it cannot be read."""
+        fetched_at, cached = cls._templates_cache
+        if cached and time.time() - fetched_at < max_age:
+            return cached
+        ok, data = cls._authed_get("/api/conversations/templates", {})
+        if not ok:
+            return cached
+        items = data.get("data") if isinstance(data, dict) else data
+        if isinstance(items, dict):
+            items = items.get("templates") or items.get("data") or []
+        found = {
+            t.get("name"): {"status": str(t.get("status") or "").upper(), "header_type": t.get("header_type") or ""}
+            for t in (items or []) if isinstance(t, dict) and t.get("name")
+        }
+        cls._templates_cache = (time.time(), found)
+        return found
+
+    @classmethod
+    def pick_template(cls, template_key: Optional[str]) -> Tuple[str, bool]:
+        """(template to send, whether it is the preferred one). Falls back to the older approved text template."""
+        prefs = cls.TEMPLATE_PREFERENCE.get(template_key or "", [cls.DEFAULT_TEMPLATE])
+        approved = {n for n, t in cls.list_templates().items() if t.get("status") == "APPROVED"}
+        for index, name in enumerate(prefs):
+            if name in approved:
+                return name, index == 0
+        return cls.DEFAULT_TEMPLATE, False
+
+    @classmethod
+    def window_open(cls, conv_id: str, token: str) -> bool:
+        """True only if the shop itself wrote in this thread within the last 24 hours (free text is then allowed)."""
+        try:
+            res = requests.get(
+                f"{settings.LAD_API_BASE_URL.rstrip('/')}/api/conversations/{conv_id}/messages",
+                headers={"Authorization": f"Bearer {token}"}, params={"limit": 50}, timeout=20,
+            )
+            if res.status_code != 200:
+                return False
+            body = res.json()
+            rows = body.get("data") if isinstance(body.get("data"), list) else (body.get("data") or {}).get("messages") or body.get("messages") or []
+            newest = None
+            for row in rows:
+                if row.get("role") == "user":
+                    when = cls._parse_ts(row)
+                    if when and (newest is None or when > newest):
+                        newest = when
+            return bool(newest and datetime.utcnow() - newest < timedelta(hours=24))
+        except Exception as err:
+            logger.warning(f"[Mr LAD] could not check the 24-hour window: {err}")
+            return False
+
     @classmethod
     def _find_conversation_id(cls, phone: str, token: str) -> Optional[str]:
         """
@@ -222,7 +285,36 @@ class MrLadWhatsAppClient:
         return None
 
     @classmethod
+    def add_note(cls, conv_id: str, content: str) -> bool:
+        """
+        Add an internal note to a Mr LAD conversation (best effort, never raises).
+        Used to leave a link to the picture that was just sent: Mr LAD's inbox cannot draw pictures sent through
+        its API because it does not record which picture it was.
+        """
+        try:
+            token, _ = cls.get_token()
+            if not token:
+                return False
+            api_base = settings.LAD_API_BASE_URL.rstrip("/")
+            res = requests.post(
+                f"{api_base}/api/conversations/{conv_id}/notes",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json={"content": content},
+                timeout=20,
+            )
+            return res.status_code == 200
+        except Exception as err:
+            logger.warning(f"[Mr LAD Note] could not add a note: {err}")
+            return False
+
+    @classmethod
     def send_image_message(cls, conv_id: str, img_path: str, caption: str = "") -> Tuple[bool, str, dict]:
+        """
+        Send a picture with a caption into a conversation as ONE WhatsApp message.
+
+        Mr LAD documents the picture as `type: image` + `file_base64` + `content_type` + `caption`, so that is
+        tried first. If it is refused, the picture is uploaded and sent by media id as a second attempt.
+        """
         token, _ = cls.get_token()
         if not token:
             return False, "Auth failed", {}
@@ -231,61 +323,48 @@ class MrLadWhatsAppClient:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
+        url = f"{api_base}/api/conversations/{conv_id}/messages"
 
-        # Prefer Meta media_id via multipart upload for 100% reliable delivery without base64 limits
-        media_id = cls._upload_media(img_path, token)
-        if media_id:
-            payload = {
-                "type": "image",
-                "media_id": media_id,
-                "caption": caption,
-            }
-        else:
-            content_type = "image/png" if img_path.lower().endswith(".png") else "image/jpeg"
-            b64 = cls._get_flyer_b64(img_path)
-            if not b64:
-                return False, f"Could not read image file: {img_path}", {}
-            payload = {
-                "type": "image",
-                "file_base64": b64,
-                "content_type": content_type,
-                "caption": caption,
-            }
+        content_type = "image/png" if img_path.lower().endswith(".png") else "image/jpeg"
+        attempts: List[Tuple[str, dict]] = []
+        b64 = cls._get_flyer_b64(img_path)
+        if b64:
+            attempts.append(("base64", {"type": "image", "file_base64": b64, "content_type": content_type, "caption": caption}))
+        if not attempts:
+            return False, f"Could not read image file: {img_path}", {}
 
-        try:
-            url = f"{api_base}/api/conversations/{conv_id}/messages"
-            res = requests.post(url, headers=headers, json=payload, timeout=60)
-            logger.info(f"[Mr LAD Flyer API] HTTP {res.status_code} | conv={conv_id} | body={res.text[:300]}")
-            if res.status_code == 200:
+        last_error = ""
+        for index in range(2):
+            if index == 1:  # second attempt: upload first, then send by media id
+                media_id = cls._upload_media(img_path, token)
+                if not media_id:
+                    break
+                attempts.append(("media_id", {"type": "image", "media_id": media_id, "caption": caption}))
+            if index >= len(attempts):
+                break
+            how, payload = attempts[index]
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=90)
+                logger.info(f"[Mr LAD Picture API] ({how}) HTTP {res.status_code} | conv={conv_id} | body={res.text[:300]}")
+                data: dict = {}
                 try:
                     data = res.json()
                 except Exception:
                     data = {"raw": res.text}
-                # Accept success=true OR non-empty response as success
-                if data.get("success") or data.get("id") or data.get("data"):
+                if res.status_code == 200 and (data.get("success") or data.get("id") or data.get("data")):
                     inner = data.get("data") or data
-                    if isinstance(inner, dict):
-                        msg_id = inner.get("id") or inner.get("message_id") or f"wamid.LAD_{uuid.uuid4().hex[:12]}"
-                    else:
-                        msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
-                    logger.info(f"[Mr LAD API] ✅ Flyer+caption sent to conv {conv_id}. ID: {msg_id}")
+                    msg_id = (inner.get("id") or inner.get("message_id")) if isinstance(inner, dict) else None
+                    msg_id = msg_id or f"wamid.LAD_{uuid.uuid4().hex[:12]}"
+                    logger.info(f"[Mr LAD API] Picture + caption sent to conv {conv_id} ({how}). ID: {msg_id}")
                     return True, msg_id, data
-                # API returned 200 but success=false — log and treat as failure
-                err = data.get("detail") or data.get("error") or data.get("message") or str(data)
-                logger.warning(f"[Mr LAD Flyer API] 200 but success=false: {err}")
-                return False, str(err), data
-            else:
-                err_data = {}
-                try:
-                    err_data = res.json()
-                except Exception:
-                    pass
-                err = err_data.get("detail") or err_data.get("error") or res.text
-                logger.warning(f"[Mr LAD Flyer API] HTTP {res.status_code}: {err}")
-                return False, str(err), err_data
-        except Exception as e:
-            logger.error(f"[Mr LAD Flyer API Exception] {e}")
-            return False, str(e), {}
+                last_error = str(data.get("detail") or data.get("error") or data.get("message") or res.text)[:300]
+                logger.warning(f"[Mr LAD Picture API] ({how}) not accepted: HTTP {res.status_code} {last_error}")
+                print(f"[Mr LAD Picture API] ({how}) not accepted: HTTP {res.status_code} {last_error}")
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"[Mr LAD Picture API Exception] ({how}) {e}")
+                print(f"[Mr LAD Picture API Exception] ({how}) {e}")
+        return False, last_error or "The picture could not be sent", {}
 
     @classmethod
     def _admin_copy_number(cls) -> Optional[str]:
@@ -379,6 +458,8 @@ class MrLadWhatsAppClient:
         send_flyer: bool = True,
         sync_admin_copy: bool = True,
         image_path: Optional[str] = None,
+        image_url: Optional[str] = None,
+        template_key: Optional[str] = None,
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Sends an outbound WhatsApp message via Mr LAD API.
@@ -398,7 +479,10 @@ class MrLadWhatsAppClient:
         # Validate against known approved templates in Mr LAD account
         approved_templates = {"lexon_official_pitch", "lexon_website_flyer_pitch"}
         configured_template = template_name or getattr(settings, "WHATSAPP_DEFAULT_TEMPLATE_NAME", None)
-        if configured_template in approved_templates:
+        if template_key:
+            # the template that carries the message the user chose (offer / about us), if WhatsApp has approved it
+            chosen_template, _preferred = cls.pick_template(template_key)
+        elif configured_template in approved_templates:
             chosen_template = configured_template
         else:
             chosen_template = "lexon_official_pitch"
@@ -527,7 +611,12 @@ class MrLadWhatsAppClient:
                     existing_conv_id = cls._find_conversation_id(recipient, token)
 
             # 2. DISPATCH AS ONE SINGLE COMBINED MESSAGE (Flyer Image + Pitch Description Caption)
-            if existing_conv_id:
+            # Free text and pictures may only go to someone who messaged us in the last 24 hours. Everyone else
+            # gets the approved template (step 3), because WhatsApp silently drops anything else.
+            window_is_open = bool(existing_conv_id) and cls.window_open(existing_conv_id, token)
+            if existing_conv_id and not window_is_open:
+                logger.info(f"[Mr LAD API] {recipient} has not written in the last 24 hours: sending the approved template '{chosen_template}'.")
+            if existing_conv_id and window_is_open:
                 flyers = cls._resolve_flyer_paths()
                 # A picture chosen by the user replaces the built-in flyer.
                 flyer_img = image_path or flyers.get("easybillbro")
@@ -544,6 +633,8 @@ class MrLadWhatsAppClient:
                     )
                     if img_ok and not caption_fits:
                         _send_freetext(existing_conv_id, outbound_message)
+                    if img_ok and image_url:
+                        cls.add_note(existing_conv_id, f"Picture sent with this message: {image_url}")
                     if img_ok:
                         logger.info(f"[Mr LAD API] Successfully dispatched flyer image with description in 1 message to {recipient} ({img_id})")
                         if sync_admin_copy and not cls._is_admin_copy_number(recipient):
@@ -577,7 +668,7 @@ class MrLadWhatsAppClient:
             logger.info(f"[Mr LAD API] Fallback template dispatch to {recipient} with template '{chosen_template}'...")
             if template_parameters is not None:
                 params_list = template_parameters
-            elif chosen_template == "lexon_official_pitch":
+            elif chosen_template in ("lexon_official_pitch", "lexon_offer_link_v1", "lexon_about_company_v1"):
                 params_list = [display_name, display_name]
             else:
                 params_list = [display_name]
@@ -620,9 +711,11 @@ class MrLadWhatsAppClient:
             msg_id = (results[0].get("message_id") or results[0].get("id") or "") if results else ""
             if not msg_id:
                 msg_id = f"wamid.LAD_{uuid.uuid4().hex[:12]}"
-            logger.info(f"[Mr LAD API] Sent fallback template to {recipient} (ID: {msg_id})")
+            logger.info(f"[Mr LAD API] Sent template '{chosen_template}' to {recipient} (ID: {msg_id})")
             if sync_admin_copy and not cls._is_admin_copy_number(recipient):
                 cls.sync_to_admin(outbound_message, display_name, recipient, send_flyer=send_flyer)
+            if isinstance(init_data, dict):
+                init_data = {**init_data, "mode": "template", "template": chosen_template}
             return True, msg_id, init_data
 
         except Exception as e:
