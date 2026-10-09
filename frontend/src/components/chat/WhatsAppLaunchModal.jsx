@@ -8,8 +8,8 @@ import MessageImagePicker, { FLYER_VALUE, pictureSrc } from '../whatsapp/Message
 import { imageCategoryFor } from '../../utils/imageTools';
 
 const TEMPLATE_NOTE = {
-  lexon_offer_link_v1: 'the approved “offer with link” template',
-  lexon_about_company_v1: 'the approved “About Lexon IT” template',
+  lexon_offer_link_v2: 'the approved “offer with link” template',
+  lexon_about_company_v2: 'the approved “About Lexon IT” template',
   lexon_official_pitch: 'the older approved text template (the new one is still waiting for WhatsApp)',
 };
 
