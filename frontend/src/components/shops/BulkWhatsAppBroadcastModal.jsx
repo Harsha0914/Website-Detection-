@@ -332,8 +332,11 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
               <div>
                 <p className="ui-label">Example for {previewName}</p>
                 <div className="rounded-2xl p-3" style={{ background: 'var(--ui-surface-2)', border: '1px solid var(--ui-border)' }}>
-                  <div className="ml-auto max-w-[92%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap" style={{ background: 'var(--ui-success-soft)', color: 'var(--ui-text)', border: '1px solid var(--ui-border)', borderBottomRightRadius: 4, overflowWrap: 'anywhere', lineHeight: 1.5 }}>
-                    {fillTemplate(message, previewName).trim() || <span className="ui-muted">Your message is empty.</span>}
+                  <div className="ml-auto max-w-[92%] rounded-2xl px-3 py-3 text-sm" style={{ background: 'var(--ui-success-soft)', color: 'var(--ui-text)', border: '1px solid var(--ui-border)', borderBottomRightRadius: 4, overflowWrap: 'anywhere', lineHeight: 1.5 }}>
+                    {attachFlyer && (
+                      <img src="/images/easybillbro-flyer.jpg" alt="EasyBillBro flyer that is sent with the message" className="w-full rounded-xl mb-2" style={{ maxHeight: 360, objectFit: 'cover', objectPosition: 'top' }} />
+                    )}
+                    <div className="whitespace-pre-wrap px-1">{fillTemplate(message, previewName).trim() || <span className="ui-muted">Your message is empty.</span>}</div>
                   </div>
                 </div>
               </div>
@@ -341,7 +344,7 @@ export default function BulkWhatsAppBroadcastModal({ isOpen, onClose, shops = []
               <label className="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" checked={attachFlyer} onChange={(e) => setAttachFlyer(e.target.checked)} className="mt-1 h-4 w-4" />
                 <span className="text-sm" style={{ color: 'var(--ui-text-2)' }}>
-                  <strong style={{ color: 'var(--ui-text)' }}>Also send our flyer images</strong> with every message.
+                  <strong style={{ color: 'var(--ui-text)' }}>Send the EasyBillBro flyer image</strong> together with every message.
                 </span>
               </label>
             </div>

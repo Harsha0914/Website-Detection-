@@ -28,6 +28,19 @@ from app.routers import (
 # Initialize database tables on startup
 Base.metadata.create_all(bind=engine)
 
+# A brand-new external database (DATABASE_URL set to PostgreSQL) gets the accounts and chats that ship
+# with the app copied in once, so nobody has to re-register. Does nothing for SQLite or a used database.
+from app.db_bootstrap import seed_empty_database  # noqa: E402
+from app.db_migrations import migrate_whatsapp_ownership  # noqa: E402
+from app.config import _DB_PATH  # noqa: E402
+migrate_whatsapp_ownership(engine, Base.metadata)  # older databases: chats become per-account
+seed_empty_database(engine, Base.metadata, _DB_PATH)
+
+# Chats are mirrored to MongoDB (when configured) so they survive restarts; copy what already exists once.
+from app.services import chat_durability  # noqa: E402  (importing installs the change listeners)
+from app.database import SessionLocal  # noqa: E402
+chat_durability.start_backfill(SessionLocal)
+
 def _ensure_sqlite_columns():
     try:
         # Only run on SQLite
