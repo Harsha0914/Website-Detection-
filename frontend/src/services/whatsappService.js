@@ -414,7 +414,7 @@ export function launchDirectWhatsAppChat(business, customMsg = null, mode = 'web
 }
 
 /** How a message to this number will really go out: 'free' (the shop wrote in the last 24 h) or 'template'. */
-export async function getWhatsAppSendMode(phone, templateKey) {
-  const res = await api.get('/ai-whatsapp/send-mode', { params: { phone, template_key: templateKey || undefined } });
+export async function getWhatsAppSendMode(phone, templateKey, picture = false) {
+  const res = await api.get('/ai-whatsapp/send-mode', { params: { phone, template_key: templateKey || undefined, picture: picture ? 'true' : undefined } });
   return res.data; // { mode, template, template_ready }
 }

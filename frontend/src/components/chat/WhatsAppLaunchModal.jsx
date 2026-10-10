@@ -8,9 +8,14 @@ import MessageImagePicker, { FLYER_VALUE, pictureSrc } from '../whatsapp/Message
 import { imageCategoryFor } from '../../utils/imageTools';
 
 const TEMPLATE_NOTE = {
+  lexon_offer_link_v4: 'the approved “offer with link” template',
+  lexon_about_company_v4: 'the approved “About Lexon IT” template',
   lexon_offer_link_v1: 'the approved “offer with link” template',
   lexon_about_company_v1: 'the approved “About Lexon IT” template',
-  lexon_official_pitch: 'the older approved text template (the new one is still waiting for WhatsApp)',
+  lexon_offer_link_v3: 'the approved “offer with link” template',
+  lexon_about_company_v3: 'the approved “About Lexon IT” template',
+  lexon_offer_link_v2: 'the approved “offer with link” template',
+  lexon_about_company_v2: 'the approved “About Lexon IT” template',
 };
 
 const TEMPLATE_ICONS = { 'offer-link': Link2, 'about-company': Building2 };
@@ -65,11 +70,11 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
     if (!isOpen || step !== 'edit' || !phoneDigits || !templateId) return undefined;
     let cancelled = false;
     setSendMode(null);
-    getWhatsAppSendMode(phoneDigits, templateId)
+    getWhatsAppSendMode(phoneDigits, templateId, !!image)
       .then((info) => { if (!cancelled) setSendMode(info); })
       .catch(() => { /* the note is only guidance; sending still works without it */ });
     return () => { cancelled = true; };
-  }, [isOpen, step, phoneDigits, templateId]);
+  }, [isOpen, step, phoneDigits, templateId, !!image]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen || !business) return null;
 
@@ -245,8 +250,10 @@ export default function WhatsAppLaunchModal({ business, isOpen, onClose, onSent 
                   <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
                   <span>
                     <strong>{shopName} has not messaged you in the last 24 hours.</strong> WhatsApp then only allows an approved template as a first
-                    message, so this will be sent as {TEMPLATE_NOTE[sendMode.template] || `the approved template “${sendMode.template}”`}.
-                    Its wording and picture are fixed. Your edits and your own picture are used once the shop replies.
+                    message.{' '}
+                    {sendMode.template
+                      ? <>This will be sent as {TEMPLATE_NOTE[sendMode.template] || `the approved template “${sendMode.template}”`}. {sendMode.with_picture ? 'Your picture goes in its header.' : 'It carries no picture.'} Its wording is fixed. Your edits to the text are used once the shop replies.</>
+                      : <>The approved template for this message is not available yet, so it cannot be sent to this shop right now.</>}
                   </span>
                 </div>
               )}
